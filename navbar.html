@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Quadro Digital</title>
+  <link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin>
+  <link rel="stylesheet" href="navbar.css" />
+</head>
+<body>
+
+<!-- SVG filters -->
+<svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0">
+  <defs>
+    <filter id="filtro-relevo-recorte" x="-60%" y="-60%" width="220%" height="220%" color-interpolation-filters="sRGB">
+      <feMorphology operator="dilate" radius="1.5" in="SourceAlpha" result="grown"/>
+      <feOffset dx="1.5" dy="-1.5" in="grown" result="s-offset"/>
+      <feGaussianBlur stdDeviation="1.5" in="s-offset" result="s-blur"/>
+      <feFlood flood-color="#4a5563" flood-opacity="0.65" result="s-color"/>
+      <feComposite in="s-color" in2="s-blur" operator="in" result="s-raw"/>
+      <feComposite in="s-raw" in2="SourceAlpha" operator="in" result="shadow"/>
+      <feMorphology operator="dilate" radius="1.5" in="SourceAlpha" result="grown2"/>
+      <feOffset dx="-1.5" dy="1.5" in="grown2" result="h-offset"/>
+      <feGaussianBlur stdDeviation="1.5" in="h-offset" result="h-blur"/>
+      <feFlood flood-color="#dce3ea" flood-opacity="0.4" result="h-color"/>
+      <feComposite in="h-color" in2="h-blur" operator="in" result="h-raw"/>
+      <feComposite in="h-raw" in2="SourceAlpha" operator="in" result="highlight"/>
+      <feMerge>
+        <feMergeNode in="SourceGraphic"/>
+        <feMergeNode in="shadow"/>
+        <feMergeNode in="highlight"/>
+      </feMerge>
+    </filter>
+    <!-- alias 'cutout' usado pelo calendario.css -->
+    <filter id="cutout" x="-60%" y="-60%" width="220%" height="220%" color-interpolation-filters="sRGB">
+      <feMorphology operator="dilate" radius="1.5" in="SourceAlpha" result="grown"/>
+      <feOffset dx="1.5" dy="-1.5" in="grown" result="s-offset"/>
+      <feGaussianBlur stdDeviation="1.5" in="s-offset" result="s-blur"/>
+      <feFlood flood-color="#4a5563" flood-opacity="0.65" result="s-color"/>
+      <feComposite in="s-color" in2="s-blur" operator="in" result="s-raw"/>
+      <feComposite in="s-raw" in2="SourceAlpha" operator="in" result="shadow"/>
+      <feMorphology operator="dilate" radius="1.5" in="SourceAlpha" result="grown2"/>
+      <feOffset dx="-1.5" dy="1.5" in="grown2" result="h-offset"/>
+      <feGaussianBlur stdDeviation="1.5" in="h-offset" result="h-blur"/>
+      <feFlood flood-color="#dce3ea" flood-opacity="0.4" result="h-color"/>
+      <feComposite in="h-color" in2="h-blur" operator="in" result="h-raw"/>
+      <feComposite in="h-raw" in2="SourceAlpha" operator="in" result="highlight"/>
+      <feMerge>
+        <feMergeNode in="SourceGraphic"/>
+        <feMergeNode in="shadow"/>
+        <feMergeNode in="highlight"/>
+      </feMerge>
+    </filter>
+  </defs>
+</svg>
+<svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0">
+  <defs>
+    <filter id="filtro-relevo-seta" x="-60%" y="-60%" width="220%" height="220%"
+      color-interpolation-filters="sRGB">
+      <feMorphology operator="dilate" radius="1.5" in="SourceAlpha" result="grown"/>
+      <feOffset dx="1.5" dy="-1.5" in="grown" result="s-offset"/>
+      <feGaussianBlur stdDeviation="1.5" in="s-offset" result="s-blur"/>
+      <feFlood flood-color="#4a5563" flood-opacity="0.2" result="s-color"/>
+      <feComposite in="s-color" in2="s-blur" operator="in" result="s-raw"/>
+      <feComposite in="s-raw" in2="SourceAlpha" operator="in" result="shadow"/>
+      <feMorphology operator="dilate" radius="1.5" in="SourceAlpha" result="grown2"/>
+      <feOffset dx="-1.5" dy="1.5" in="grown2" result="h-offset"/>
+      <feGaussianBlur stdDeviation="1.5" in="h-offset" result="h-blur"/>
+      <feFlood flood-color="#dce3ea" flood-opacity="0.3" result="h-color"/>
+      <feComposite in="h-color" in2="h-blur" operator="in" result="h-raw"/>
+      <feComposite in="h-raw" in2="SourceAlpha" operator="in" result="highlight"/>
+      <feMerge>
+        <feMergeNode in="SourceGraphic"/>
+        <feMergeNode in="shadow"/>
+        <feMergeNode in="highlight"/>
+      </feMerge>
+    </filter>
+  </defs>
+</svg>
+
+<!-- ══ Modal de Login da Sala ══════════════════════════════ -->
+<div class="modal-overlay aberto" id="modal-login-sala">
+  <div class="aba-login aba-login-sala">
+    <div class="fixo">
+      <!-- placeholder invisível para o .fixo ter altura (= botão fechar do admin) -->
+      <div style="width:35px;height:35px;flex-shrink:0;visibility:hidden"></div>
+      <div id="titulo-login-sala-dinamico"></div>
+    </div>
+    <div class="caixa-t" spellcheck="false">
+      <input type="text" style="display:none" tabindex="-1" aria-hidden="true">
+      <div class="user-t">
+        <input id="campo-codigo-sala" type="text" placeholder=" " required autocomplete="off"
+          name="campo_codigo_xpto_529" spellcheck="false" autocorrect="off"
+          autocapitalize="off" readonly onfocus="this.removeAttribute('readonly');">
+        <label for="campo-codigo-sala">Código</label>
+      </div>
+      <div class="acesso" style="justify-content:center;">
+        <button id="botao-entrar-sala" type="button"><h2>entrar</h2></button>
+        <button id="botao-ajuda-login" type="button" aria-label="Ajuda"><h2>?</h2></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal de Login ══════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-login">
+  <div class="aba-login">
+    <div class="fixo">
+      <button class="fechar" type="button" aria-label="Fechar" id="botao-fechar-modal-login">
+        <svg class="icone-fechar" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+        </svg>
+      </button>
+      <div id="titulo-login-dinamico"></div>
+    </div>
+    <iframe name="login-sink" style="display:none" aria-hidden="true"></iframe>
+    <form class="caixa-t" id="form-login-admin" spellcheck="false" method="post" action="/login" target="login-sink" novalidate>
+      <input type="text" style="display:none" tabindex="-1" aria-hidden="true">
+      <input type="password" style="display:none" tabindex="-1" aria-hidden="true">
+      <div class="user-t">
+        <input id="campo-usuario-login" type="text" placeholder=" " required
+          name="username" autocomplete="off" spellcheck="false" autocorrect="off"
+          autocapitalize="off" readonly>
+        <label for="campo-usuario-login">Usuário</label>
+      </div>
+      <div class="user-t" id="grupo-campo-senha">
+        <input id="campo-senha-login" type="password" placeholder=" " required
+          name="password" autocomplete="off" spellcheck="false" autocorrect="off"
+          autocapitalize="off" readonly>
+        <label for="campo-senha-login">Senha</label>
+        <button class="icone-senha" type="button" onclick="alternarVisibilidadeSenha()" aria-label="Mostrar/ocultar senha">
+          <svg class="icone-menos" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3.5 12 L20.5 12"/>
+          </svg>
+          <svg class="icone-mais" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3.5 12 L20.5 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="acesso">
+        <button id="botao-entrar-login" type="submit"><h2>entrar</h2></button>
+        <button id="botao-ajuda-login-admin" type="button" aria-label="Ajuda"><h2>?</h2></button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ══ Conteúdo dinâmico das abas ═════════════════════════ -->
+<div class="conteudo-tipo" id="conteudo-tipo"></div>
+
+<!-- ══ Topo ════════════════════════════════════════════════ -->
+<div class="topo-geral">
+  <div class="abas">
+    <span class="aba-visual">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 6L15 12L9 18"/>
+      </svg>
+      <h1 id="titulo-painel-principal">QUADRO DIGITAL</h1>
+    </span>
+    <h2 class="aba-nome" id="rotulo-aba-calendario">calendário</h2>
+  </div>
+</div>
+<button id="botao-acao-topo"></button>
+
+<!-- ══ Navbar ══════════════════════════════════════════════ -->
+<div class="navbar-wrapper">
+  <div class="bar"></div>
+    <div class="bar-cutout">
+      <svg class="cutout" id="recorte-svg-navbar" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1177 491">
+        <defs>
+          <!-- clip do fill: shape completa para o fill não vazar -->
+          <clipPath id="clip-navbar">
+            <path d="m10 6 27 27a326 326 0 0 1 84 119l34 76a322 322 0 0 0 42 67 612 612 0 0 0 163 136 704 704 0 0 0 125 44l56 8c12 2 90 1 104-1l28-5 26-5a203 203 0 0 0 44-13 413 413 0 0 0 148-80l15-12a722 722 0 0 0 69-75c9-11 36-53 42-65 22-45 21-43 30-70 10-27 12-32 18-42l35-49a588 588 0 0 1 56-60L583 5z"/>
+          </clipPath>
+        </defs>
+        <!-- fill que cobre o fundo -->
+        <path fill="rgb(var(--cor-cinza-fundo))" stroke="none"
+          d="m10 6 27 27a326 326 0 0 1 84 119l34 76a322 322 0 0 0 42 67 612 612 0 0 0 163 136 704 704 0 0 0 125 44l56 8c12 2 90 1 104-1l28-5 26-5a203 203 0 0 0 44-13 413 413 0 0 0 148-80l15-12a722 722 0 0 0 69-75c9-11 36-53 42-65 22-45 21-43 30-70 10-27 12-32 18-42l35-49a588 588 0 0 1 56-60L583 5z"/>
+        <!-- stroke com dasharray dinâmico para não aparecer nas pontas (zona do border-radius) -->
+        <path id="path-stroke-navbar" fill="none" stroke="rgb(var(--cor-cinza-borda))" stroke-width="50"
+          clip-path="url(#clip-navbar)"
+          d="m10 6 27 27a326 326 0 0 1 84 119l34 76a322 322 0 0 0 42 67 612 612 0 0 0 163 136 704 704 0 0 0 125 44l56 8c12 2 90 1 104-1l28-5 26-5a203 203 0 0 0 44-13 413 413 0 0 0 148-80l15-12a722 722 0 0 0 69-75c9-11 36-53 42-65 22-45 21-43 30-70 10-27 12-32 18-42l35-49a588 588 0 0 1 56-60"/>
+      </svg>
+    </div>
+  <div class="indicator" id="indicator">
+    <canvas id="canvas-indicador"></canvas>
+  </div>
+  <div class="nav-icons">
+    <button class="nav-btn" id="botao-navbar-adicionar">
+      <svg xmlns="http://www.w3.org/2000/svg" width="25" height="25" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 12h14"/><path d="M12 5v14"/>
+      </svg>
+    </button>
+    <button class="nav-btn" id="bnt-proximo">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8 2v4"/><path d="M12 2v4"/><path d="M16 2v4"/>
+        <rect width="16" height="18" x="4" y="4" rx="2"/>
+        <path d="M8 10h6"/><path d="M8 14h8"/><path d="M8 18h5"/>
+      </svg>
+    </button>
+    <button class="nav-btn active" id="btn-calendario">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 20a2 2 0 0 0 2 2h10a2.4 2.4 0 0 0 1.706-.706l3.588-3.588A2.4 2.4 0 0 0 21 16V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2z"/>
+        <path d="M15 22v-5a1 1 0 0 1 1-1h5"/>
+        <path d="M8 2v4"/><path d="M16 2v4"/><path d="M3 10h18"/>
+      </svg>
+    </button>
+    <button class="nav-btn" id="btn-material">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 10a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/>
+        <path d="M8 10h8"/><path d="M8 18h8"/>
+        <path d="M8 22v-6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v6"/>
+        <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>
+      </svg>
+    </button>
+    <button class="nav-btn" id="btn-config">
+      <svg xmlns="http://www.w3.org/2000/svg" width="22.5" height="22.5" viewBox="0 0 24 24" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/>
+        <path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/>
+        <path d="M8 10v4"/><path d="M8 12H3"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<!-- Dependências -->
+<script>
+  // pdf.js carregado sob demanda (só quando o usuário abre um PDF)
+  window._pdfWorkerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  window._carregarPdfJs = function() {
+    if (window._pdfJsLoading || typeof pdfjsLib !== 'undefined') return Promise.resolve();
+    window._pdfJsLoading = true;
+    return new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      s.onload = () => { pdfjsLib.GlobalWorkerOptions.workerSrc = window._pdfWorkerSrc; res(); };
+      s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  };
+</script>
+<script src="navbar.js" defer></script>
+</body>
+</html>
