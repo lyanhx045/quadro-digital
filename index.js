@@ -1174,7 +1174,7 @@ atualizarFavicon();
 
 
 (function inicializarIndicadorCristal() {
-  const BASE = 200;
+  const BASE = 120; // reduzido de 200 para 120 (64% menos pixels por frame)
   const dpr  = window.devicePixelRatio || 2;
 
   const canvas = document.getElementById('canvas-indicador');
@@ -1288,11 +1288,16 @@ atualizarFavicon();
   let _cristalPaused = false;
   let _cristalRafId  = null;
 
-  function animarCristal() {
+  let _cristalUltimoFrame = 0;
+  const _CRISTAL_INTERVALO = 1000 / 24; // 24 fps
+  function animarCristal(agora) {
     if (!_cristalPaused) {
-      t     += 0.02;
-      angle += 0.002;
-      desenharCristal();
+      if (!agora || agora - _cristalUltimoFrame >= _CRISTAL_INTERVALO) {
+        _cristalUltimoFrame = agora || 0;
+        t     += 0.02 * (60 / 24);
+        angle += 0.002 * (60 / 24);
+        desenharCristal();
+      }
     }
     _cristalRafId = requestAnimationFrame(animarCristal);
   }
@@ -1413,7 +1418,7 @@ function renderConfigRepre() { renderConfigAluno(); }
    com throttle de 20 fps (suficiente para bolinhas decorativas). */
 const _esferasAtivas = [];   // lista de descritores de esfera
 let   _esferaLoopAtivo = false;
-const _ESFERA_FPS    = 20;
+const _ESFERA_FPS    = 15; // reduzido de 20 para 15 fps
 const _ESFERA_INTERVALO = 1000 / _ESFERA_FPS;
 let   _esferaUltimoFrame = 0;
 
@@ -1469,7 +1474,7 @@ function _desenharEsfera(e) {
 function _initEsfera(canvasId, opts) {
   opts = opts || {};
   // Esferas do painel de cores são pequenas (≤37.5px) — usa BASE menor para economizar
-  const BASE   = opts.tamanho && opts.tamanho <= 40 ? 100 : 200;
+  const BASE   = 100; // sempre 100 — esferas são decorativas pequenas
   const dpr    = window.devicePixelRatio || 2;
   const LOGICO = opts.tamanho || 52.5;
   const canvas = document.getElementById(canvasId);
