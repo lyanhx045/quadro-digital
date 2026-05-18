@@ -1,11 +1,11 @@
 {
   "name": "Quadro Digital",
-  "short_name": "Quadro",
-  "description": "Quadro digital para salas de aula",
+  "short_name": "Quadro Digital",
+  "description": "Quadro Digital, uma ferramenta para auxilio escolar.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#dddddd",
-  "theme_color": "#0a50a5",
+  "theme_color": "#dddddd",
   "orientation": "portrait-primary",
   "icons": [
     {

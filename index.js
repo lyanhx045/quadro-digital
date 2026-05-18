@@ -1044,6 +1044,14 @@ function atualizarFavicon(idxOverride) {
   if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
   link.type = 'image/svg+xml';
   link.href = 'data:image/svg+xml,' + encodeURIComponent(svg);
+
+  let metaTheme = document.querySelector("meta[name='theme-color']");
+  if (!metaTheme) {
+    metaTheme = document.createElement('meta');
+    metaTheme.name = 'theme-color';
+    document.head.appendChild(metaTheme);
+  }
+  metaTheme.content = `rgb(${escuro})`;
 }
 
 /* Atualiza favicon quando o modo do sistema mudar */
