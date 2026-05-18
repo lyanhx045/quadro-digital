@@ -1051,7 +1051,9 @@ function atualizarFavicon(idxOverride) {
     metaTheme.name = 'theme-color';
     document.head.appendChild(metaTheme);
   }
-  metaTheme.content = `rgb(${escuro})`;
+  const fundoClaro = '221, 221, 221';
+  const fundoEscuro = '18, 18, 22';
+  metaTheme.content = `rgb(${dark ? fundoEscuro : fundoClaro})`;
 }
 
 /* Atualiza favicon quando o modo do sistema mudar */
