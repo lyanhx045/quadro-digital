@@ -1,4 +1,4 @@
-const CACHE = 'quadro-v2';
+const CACHE = 'quadro-v1.1';
 const STATIC = [
   '/',
   '/index.html',

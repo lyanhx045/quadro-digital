@@ -3708,6 +3708,7 @@ function _abrirModalDrive(itemEdicao, semLink = false) {
       area: DISCIPLINAS_DRIVE[idxArea],
       professor: autor,
       ...(semLink ? {} : { link }),
+      ...(window._salaAtual?.id ? { sala_id: window._salaAtual.id } : {}),
     };
 
     const botao = document.getElementById('botao-salvar-drive');
