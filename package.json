@@ -18,5 +18,11 @@
   "bugs": {
     "url": "https://github.com/lyanhx045/quadro-digital/issues"
   },
-  "homepage": "https://github.com/lyanhx045/quadro-digital#readme"
+  "homepage": "https://github.com/lyanhx045/quadro-digital#readme",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.105.4",
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.4.2",
+    "formidable": "^3.5.4"
+  }
 }
