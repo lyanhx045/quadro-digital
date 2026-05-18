@@ -7,7 +7,7 @@ const { IncomingForm } = require('formidable');
 const { createClient } = require('@supabase/supabase-js');
 const bcrypt = require('bcryptjs');
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const RAIZ = __dirname;
 const BUCKET = 'anexos';
 
@@ -44,11 +44,11 @@ function obterMimeTypePorExtensao(ext) {
 }
 
 // Rotas de acesso restrito (bloqueadas para acesso direto)
-const ROTAS_RESTRITAS = ['/formulario.html', '/assets/js/index.js'];
+const ROTAS_RESTRITAS = ['/assets/js/index.js'];
 
 // Serve arquivos estáticos (HTML/CSS/JS) da pasta
 function servirArquivoEstatico(req, res) {
-  let urlPath = req.url === '/' ? '/navbar.html' : req.url;
+  let urlPath = req.url === '/' ? '/index.html' : req.url;
   urlPath = urlPath.split('?')[0];
 
   if (ROTAS_RESTRITAS.includes(urlPath)) {
