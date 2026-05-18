@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Quadro Digital</title>
   <link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin>
+  <meta name="theme-color" content="#0a50a5"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  <meta name="apple-mobile-web-app-title" content="Quadro Digital"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/icons/icon-192.png"/>
   <link rel="stylesheet" href="index.css" />
 </head>
 <body>
@@ -238,6 +245,13 @@
       document.head.appendChild(s);
     });
   };
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js');
+    });
+  }
 </script>
 <script src="index.js" defer></script>
 </body>
