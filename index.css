@@ -780,12 +780,15 @@ body {
   stroke: rgb(var(--cor-letra));
   filter: drop-shadow(1.5px 1.5px 2px rgba(var(--cor-sombra-apagada), 0.2));
   animation: seta-dinamica 2s cubic-bezier(.34, 1.56, .64, 1) infinite;
+  will-change: transform;
 }
 
 @keyframes seta-dinamica {
-  0%, 60%, 100% { transform: translateX(0); }
-  20%  { transform: translateX(-5px); }
-  40%  { transform: translateX(2px); }
+  0%, 60%, 100%   { transform: translateX(0) scale(1); }
+  9%              { transform: translateX(-8px) scale(1.06); }
+  18%             { transform: translateX(2px) scale(0.99) rotate(7deg); }
+  30%             { transform: translateX(-5px) scale(1.04); }
+  42%             { transform: translateX(1.5px) scale(1) rotate(4.5deg); }
 }
 
 #titulo-painel-principal {
