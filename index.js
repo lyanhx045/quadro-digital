@@ -1407,6 +1407,107 @@ function renderConfigRepre() { renderConfigAluno(); }
    Aba "configurações" — aparência e exibição
    ══════════════════════════════════════════════════════════ */
 
+/* ── Loop compartilhado para todas as esferas do painel de cores ──
+   Em vez de 12 requestAnimationFrame independentes (12 × 40k pixels/frame),
+   um único loop sequencial renderiza todas as esferas cadastradas,
+   com throttle de 20 fps (suficiente para bolinhas decorativas). */
+const _esferasAtivas = [];   // lista de descritores de esfera
+let   _esferaLoopAtivo = false;
+const _ESFERA_FPS    = 20;
+const _ESFERA_INTERVALO = 1000 / _ESFERA_FPS;
+let   _esferaUltimoFrame = 0;
+
+function _tickEsferas(agora) {
+  if (!_esferaLoopAtivo) return;
+  requestAnimationFrame(_tickEsferas);
+  if (agora - _esferaUltimoFrame < _ESFERA_INTERVALO) return; // throttle
+  if (document.hidden) return;
+  _esferaUltimoFrame = agora;
+
+  for (let s = 0; s < _esferasAtivas.length; s++) {
+    const e = _esferasAtivas[s];
+    e.t   += 0.02 * (60 / _ESFERA_FPS); // compensa velocidade no throttle
+    e.ang += 0.002 * (60 / _ESFERA_FPS);
+    _desenharEsfera(e);
+  }
+}
+
+function _desenharEsfera(e) {
+  const { offCtx, ctx, canvas, escuro, claro, BASE } = e;
+  const img = offCtx.createImageData(BASE, BASE);
+  const d   = img.data;
+  const cx  = BASE / 2, r = BASE / 2;
+  const cos = Math.cos(e.ang), sin = Math.sin(e.ang);
+  for (let py = 0; py < BASE; py++) {
+    for (let px = 0; px < BASE; px++) {
+      const dx = px - cx, dy = py - cx;
+      if (dx * dx + dy * dy > r * r) continue;
+      const rx = cos * dx - sin * dy + cx;
+      const ry = sin * dx + cos * dy + cx;
+      const n   = Math.sin(rx * 0.04 + e.t) * Math.cos(ry * 0.03 + e.t * 0.7) * 0.5
+                + Math.sin(rx * 0.02 + ry * 0.025 + e.t * 1.3) * 0.3
+                + Math.cos(rx * 0.05 - ry * 0.02  + e.t * 0.9) * 0.2;
+      const raw = Math.max(0, Math.min(1, ((rx / BASE) + n * 0.35 - 0.2) / 0.6));
+      const b   = 1 / (1 + Math.exp(-7 * (raw - 0.5)));
+      const i   = (py * BASE + px) * 4;
+      d[i]   = claro[0] + b * (escuro[0] - claro[0]);
+      d[i+1] = claro[1] + b * (escuro[1] - claro[1]);
+      d[i+2] = claro[2] + b * (escuro[2] - claro[2]);
+      d[i+3] = 255;
+    }
+  }
+  offCtx.putImageData(img, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(canvas.width / 2, canvas.height / 2, canvas.width / 2, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.drawImage(e.off, 0, 0, canvas.width, canvas.height);
+  ctx.restore();
+}
+
+function _initEsfera(canvasId, opts) {
+  opts = opts || {};
+  // Esferas do painel de cores são pequenas (≤37.5px) — usa BASE menor para economizar
+  const BASE   = opts.tamanho && opts.tamanho <= 40 ? 100 : 200;
+  const dpr    = window.devicePixelRatio || 2;
+  const LOGICO = opts.tamanho || 52.5;
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return function(){};
+
+  canvas.width  = Math.round(LOGICO * dpr);
+  canvas.height = Math.round(LOGICO * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
+  const off = document.createElement('canvas');
+  off.width = off.height = BASE;
+  const offCtx = off.getContext('2d');
+
+  const desc = {
+    canvas, ctx, off, offCtx, BASE,
+    escuro: opts.corEscuro || [7, 79, 163],
+    claro:  opts.corClaro  || [1, 110, 203],
+    t:   0,
+    ang: opts.anguloInicial || 0,
+  };
+
+  _esferasAtivas.push(desc);
+
+  // Inicia o loop compartilhado se ainda não estiver rodando
+  if (!_esferaLoopAtivo) {
+    _esferaLoopAtivo = true;
+    requestAnimationFrame(_tickEsferas);
+  }
+
+  // Retorna função para remover esta esfera do loop (ex: ao trocar de aba)
+  return function() {
+    const idx = _esferasAtivas.indexOf(desc);
+    if (idx !== -1) _esferasAtivas.splice(idx, 1);
+    if (_esferasAtivas.length === 0) _esferaLoopAtivo = false;
+  };
+}
 
 /* ── Dados dos estados do modo-slider ── */
 const _CFG_STATES = [
@@ -1485,7 +1586,9 @@ function montarPainelConfig() {
         </div>
         <div class="painel-cor">
           ${PALETA.map((_,i) => `
-          <span class="painel-cor-esfera" id="cfg-esfera-${i}" data-cfg-esfera="${i}"></span>`).join('')}
+          <span class="painel-cor-esfera" id="cfg-esfera-${i}" data-cfg-esfera="${i}">
+            <canvas id="cfg-esfera-canvas-${i}"></canvas>
+          </span>`).join('')}
         </div>
       </div>
 
@@ -1677,8 +1780,12 @@ function montarPainelConfig() {
       [parseRgb2('--tom-marrom-escuro'),   parseRgb2('--tom-marrom-claro')  ],
       [parseRgb2('--tom-amarelo-escuro'),  parseRgb2('--tom-amarelo-claro') ],
     ];
-    // Gradiente e --esfera-claro das esferas agora vivem 100% no CSS —
-    // as variáveis --tom-*-claro/escuro no :root são suficientes.
+    novasPaleta.forEach(([esc, cla], i) => {
+      const el = document.getElementById(`cfg-esfera-${i}`);
+      if (!el) return;
+      el.style.setProperty('--esfera-claro', cla.join(', '));
+      el.style.background = `rgb(${esc.join(', ')})`;
+    });
 
     // Reaplica cor principal salva com os novos toms
     try {
@@ -1759,23 +1866,51 @@ function montarPainelConfig() {
     }
   } catch(e) {}
 
-  // Gradiente, rotação e --esfera-claro agora vivem 100% no CSS
-  // (ver seção "ESFERAS DE COR" em navbar.css)
+  const _destruirEsferas = [];
   PALETA.forEach(([escuro, claro], i) => {
+    // Escalona cada esfera em 30ms de diferença para não sobrecarregar o primeiro frame
+    setTimeout(() => {
+      if (!document.getElementById(`cfg-esfera-canvas-${i}`)) return; // aba já fechada
+      const destruir = _initEsfera(`cfg-esfera-canvas-${i}`, {
+        tamanho: 37.5,
+        corEscuro: escuro,
+        corClaro:  claro,
+        anguloInicial: (i / 12) * Math.PI * 2
+      });
+      _destruirEsferas.push(destruir);
+    }, i * 30);
     const el = document.getElementById(`cfg-esfera-${i}`);
-    if (!el) return;
+    el.style.setProperty('--esfera-claro', claro.join(', '));
+    el.style.background = `rgb(${escuro.join(', ')})`;
     el.addEventListener('click', () => {
-      selecionarCor(escuro, claro, el, i);
+      // Lê os valores atuais do elemento para respeitar o tema corrente
+      // (o _aplicarTema atualiza --esfera-claro e background quando o modo muda)
+      const _escuroAtual = getComputedStyle(el).backgroundColor
+        .replace(/^rgb\(|\)$/g, '').split(',').map(s => Number(s.trim()));
+      const _claroAtual  = el.style.getPropertyValue('--esfera-claro')
+        .split(',').map(s => Number(s.trim()));
+      selecionarCor(_escuroAtual, _claroAtual, el, i);
     });
   });
-
-  // Restaura a cor salva
+  // Restaura a cor salva — adiado para após o initSlider/_aplicarTema atualizarem as esferas
   setTimeout(() => {
-    const [_escuroSalvo, _claroSalvo] = PALETA[_idxCorSalva];
     const _elSalva = document.getElementById(`cfg-esfera-${_idxCorSalva}`);
     if (!_elSalva) return;
+    const _escuroSalvo = getComputedStyle(_elSalva).backgroundColor
+      .replace(/^rgb\(|\)$/g, '').split(',').map(s => Number(s.trim()));
+    const _claroSalvo  = _elSalva.style.getPropertyValue('--esfera-claro')
+      .split(',').map(s => Number(s.trim()));
     selecionarCor(_escuroSalvo, _claroSalvo, _elSalva, _idxCorSalva);
   }, 0);
+
+  // Remove todas as esferas do loop compartilhado quando o painel for desmontado
+  const _cfgCleanupObs = new MutationObserver(() => {
+    if (!document.getElementById('cfg-esfera-canvas-0')) {
+      _destruirEsferas.forEach(fn => fn && fn());
+      _cfgCleanupObs.disconnect();
+    }
+  });
+  _cfgCleanupObs.observe(conteudoTipo, { childList: true });
 
   // ── Botões sala/casa ──
   function _sincronizarBotoesExibicao() {
