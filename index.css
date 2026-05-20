@@ -848,7 +848,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  contain: style layout;
+  contain: style;
 }
 
 
@@ -3997,8 +3997,7 @@ li.erro-envio #entrada-link + .preview-link {
   width: 130%;
   aspect-ratio: 1;
   background: rgb(var(--cor-matematica));
-  filter: blur(20px);
-  will-change: transform;
+  filter: blur(28px);
   opacity: 0.95;
   top: -60%;
   left: -20%;
@@ -4010,8 +4009,7 @@ li.erro-envio #entrada-link + .preview-link {
   width: 80%;
   aspect-ratio: 1;
   background: rgb(var(--cor-linguagens));
-  filter: blur(16px);
-  will-change: transform;
+  filter: blur(22px);
   opacity: 0.95;
   top: -40%;
   right: -10%;
@@ -4034,8 +4032,7 @@ li.erro-envio #entrada-link + .preview-link {
   aspect-ratio: 1;
   background: rgb(var(--cor-itinerario));
   border-radius: 50%;
-  filter: blur(18px);
-  will-change: transform;
+  filter: blur(24px);
   opacity: 1;
   top: -20%;
   left: 25%;
@@ -4051,8 +4048,7 @@ li.erro-envio #entrada-link + .preview-link {
   aspect-ratio: 1;
   background: rgb(var(--cor-humanas));
   border-radius: 50%;
-  filter: blur(20px);
-  will-change: transform;
+  filter: blur(28px);
   opacity: 0.75;
   bottom: -50%;
   left: -5%;
@@ -4068,8 +4064,7 @@ li.erro-envio #entrada-link + .preview-link {
   aspect-ratio: 1;
   background: rgb(var(--cor-natureza));
   border-radius: 50%;
-  filter: blur(18px);
-  will-change: transform;
+  filter: blur(26px);
   opacity: 0.75;
   bottom: -45%;
   right: -5%;
@@ -4273,12 +4268,11 @@ li.erro-envio #entrada-link + .preview-link {
   right: 1.5vh;
 }
 
-/* pontos-material só animam quando o card de material está aberto */
-.card-material.material-aberto #p1-material { animation: estagio-5-material 5s infinite; }
-.card-material.material-aberto #p2-material { animation: estagio-4-material 5s infinite; }
-.card-material.material-aberto #p3-material { animation: estagio-3-material 5s infinite; }
-.card-material.material-aberto #p4-material { animation: estagio-2-material 5s infinite; }
-.card-material.material-aberto #p5-material { animation: estagio-1-material 5s infinite; }
+#p1-material{ animation: estagio-5-material 5s infinite; }
+#p2-material { animation: estagio-4-material 5s infinite; }
+#p3-material { animation: estagio-3-material 5s infinite; }
+#p4-material { animation: estagio-2-material 5s infinite; }
+#p5-material{ animation: estagio-1-material 5s infinite; }
 
 @keyframes estagio-1-material {
   0%   { background: rgb(var(--cor-matematica));  box-shadow: 0 0 3px rgb(var(--cor-matematica));  }
