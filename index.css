@@ -1344,6 +1344,7 @@ header .grupo-icones-navegacao span:hover {
 
 .card-atividade.aberto .card-detalhes {
   opacity: 1;
+  align-items: flex-start;
   color: rgb(var(--cor-letra-apagada));
   transform: translateY(0) scale(1);
   margin-bottom: 8.5px;
@@ -1359,14 +1360,14 @@ header .grupo-icones-navegacao span:hover {
 }
 
 .card-atividade.aberto .card-detalhes::-webkit-scrollbar-track {
-  background: rgb(var(--cor-branco-claro));
+  background: rgb(var(--cor-branco-medio));
   border-radius: 20px;
 }
 
 .card-atividade.aberto .card-detalhes::-webkit-scrollbar-thumb {
   background: rgb(var(--cor-branco-escuro));
   border-radius: 10px;
-  border: 2.2px solid rgb(var(--cor-branco-claro));
+  border: 2.2px solid rgb(var(--cor-branco-medio));
 }
 
 .card-atividade.aberto .card-detalhes::-webkit-scrollbar-thumb:hover {
