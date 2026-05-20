@@ -5133,7 +5133,7 @@ li.erro-envio #entrada-link + .preview-link {
 }
 
 .painel-exibir {
-  height: 7vh;
+  height: 50px;
   width: 100%;
   background: rgb(var(--cor-branco-claro));
   border-radius: 22.5px;
@@ -5162,35 +5162,11 @@ li.erro-envio #entrada-link + .preview-link {
 .painel-cor span.painel-cor-esfera {
   height: 35px;
   aspect-ratio: 1/1;
-  border-radius: 100px;
-  position: relative;
-}
-
-.painel-cor-esfera::after {
-  content: "";
-  position: absolute;
-  inset: 0;
   border-radius: 50%;
-  pointer-events: none;
-  box-shadow:
-    inset 0 0 6px  rgba(var(--esfera-claro), 0.5),
-    inset 0 0 14px rgba(var(--esfera-claro), 0.2);
-  z-index: 2;
-}
-
-.painel-cor-esfera canvas {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  display: block;
   cursor: pointer;
-}
-
-.painel-cor-esfera {
-  overflow: visible; /* ← aqui também */
+  background: linear-gradient(135deg,
+    rgb(var(--esfera-claro))  25%,
+    rgb(var(--esfera-escuro)) 75%);
   box-shadow:
     0 0 6px  rgba(var(--esfera-claro), 0.35),
     0 0 14px rgba(var(--esfera-claro), 0.15);
@@ -5234,14 +5210,14 @@ li.erro-envio #entrada-link + .preview-link {
   opacity: 0.8;
 }
 
-#exibir-sala:hover, #exibir-sala.exibindo {
+#exibir-sala.exibindo {
   background: rgb(var(--cor-principal-claro));
   text-shadow:
     0 0 5px rgba(var(--cor-principal-claro), 0.35),
    -1.5px 2px 2px rgba(var(--cor-relevo-claro), 0.35);
 }
 
-#exibir-casa:hover, #exibir-casa.exibindo {
+#exibir-casa.exibindo {
   background: rgb(var(--cor-principal-escuro));
   text-shadow:
     0 0 5px rgba(var(--cor-principal-escuro), 0.35),
@@ -5853,3 +5829,38 @@ li.erro-envio #entrada-link + .preview-link {
   animation-name: autofill-detected;
   animation-duration: 1ms;
 }
+
+/* ============================================================
+   ESFERAS DE COR — gradientes e rotações 100% CSS
+   (elimina a necessidade de JS para background/transform)
+
+   Paleta:
+     0  azul      --tom-azul-*
+     1  roxo      --tom-roxo-*
+     2  rosa      --tom-rosa-*
+     3  vermelho  --tom-vermelho-*
+     4  ciano     --tom-ciano-*
+     5  musgo     --tom-musgo-*
+     6  cinza     --tom-cinza-*
+     7  laranja   --tom-laranja-*
+     8  marinho   --tom-marinho-*
+     9  verde     --tom-verde-*
+    10  marrom    --tom-marrom-*
+    11  amarelo   --tom-amarelo-*
+
+   Ângulo por proporção áurea: (i × 137.508°) mod 360°
+   ============================================================ */
+
+/* ── cores por esfera ── */
+#cfg-esfera-0  { --esfera-claro: var(--tom-azul-claro);      --esfera-escuro: var(--tom-azul-escuro);      }
+#cfg-esfera-1  { --esfera-claro: var(--tom-roxo-claro);      --esfera-escuro: var(--tom-roxo-escuro);      }
+#cfg-esfera-2  { --esfera-claro: var(--tom-rosa-claro);      --esfera-escuro: var(--tom-rosa-escuro);      }
+#cfg-esfera-3  { --esfera-claro: var(--tom-vermelho-claro);  --esfera-escuro: var(--tom-vermelho-escuro);  }
+#cfg-esfera-4  { --esfera-claro: var(--tom-ciano-claro);     --esfera-escuro: var(--tom-ciano-escuro);     }
+#cfg-esfera-5  { --esfera-claro: var(--tom-musgo-claro);     --esfera-escuro: var(--tom-musgo-escuro);     }
+#cfg-esfera-6  { --esfera-claro: var(--tom-cinza-claro);     --esfera-escuro: var(--tom-cinza-escuro);     }
+#cfg-esfera-7  { --esfera-claro: var(--tom-laranja-claro);   --esfera-escuro: var(--tom-laranja-escuro);   }
+#cfg-esfera-8  { --esfera-claro: var(--tom-marinho-claro);   --esfera-escuro: var(--tom-marinho-escuro);   }
+#cfg-esfera-9  { --esfera-claro: var(--tom-verde-claro);     --esfera-escuro: var(--tom-verde-escuro);     }
+#cfg-esfera-10 { --esfera-claro: var(--tom-marrom-claro);    --esfera-escuro: var(--tom-marrom-escuro);    }
+#cfg-esfera-11 { --esfera-claro: var(--tom-amarelo-claro);   --esfera-escuro: var(--tom-amarelo-escuro);   }
