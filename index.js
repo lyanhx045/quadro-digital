@@ -4974,9 +4974,10 @@ function renderizarListaAtividadesProximas() {
 function atualizarAlturasCardsProximos() {
   const lista = document.getElementById('lista-atividades-proximas');
   if (!lista) return;
+  const maxH = window.innerHeight * 0.15;
   lista.querySelectorAll('.card-atividade').forEach(card => {
     const d = card.querySelector('.card-detalhes');
-    if (d) card.style.setProperty('--detalhes-height', `${d.scrollHeight}px`);
+    if (d) card.style.setProperty('--detalhes-height', `${Math.min(d.scrollHeight, maxH)}px`);
   });
 }
 
@@ -5357,9 +5358,10 @@ function criarCardAtividadeDia(item) {
 }
 
 function atualizarAlturasCardsAtividade() {
+  const maxH = window.innerHeight * 0.15;
   document.querySelectorAll('.card-atividade').forEach(card => {
     const d = card.querySelector('.card-detalhes');
-    if (d) card.style.setProperty('--detalhes-height', `${d.scrollHeight}px`);
+    if (d) card.style.setProperty('--detalhes-height', `${Math.min(d.scrollHeight, maxH)}px`);
   });
 }
 

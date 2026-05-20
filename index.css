@@ -1378,6 +1378,33 @@ header .grupo-icones-navegacao span:hover {
   background: rgb(var(--cor-letra-apagada));
 }
 
+/* Detalhes nos cards do calendário e do próximo — max-height + scroll */
+.card-atividade.aberto .card-detalhes {
+  max-height: 15vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--cor-branco-escuro)) rgb(var(--cor-branco-medio));
+}
+
+.card-atividade.aberto .card-detalhes::-webkit-scrollbar {
+  width: 10px;
+}
+
+.card-atividade.aberto .card-detalhes::-webkit-scrollbar-track {
+  background: rgb(var(--cor-branco-medio));
+  border-radius: 20px;
+}
+
+.card-atividade.aberto .card-detalhes::-webkit-scrollbar-thumb {
+  background: rgb(var(--cor-branco-escuro));
+  border-radius: 10px;
+  border: 2.2px solid rgb(var(--cor-branco-medio));
+}
+
+.card-atividade.aberto .card-detalhes::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--cor-letra-apagada));
+}
+
 .card-atividade.aberto .card-pontos-tipo {
   opacity: 1;
   transform: scale(1) translateY(0);
