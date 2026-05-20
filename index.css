@@ -1344,8 +1344,6 @@ header .grupo-icones-navegacao span:hover {
 
 .card-atividade.aberto .card-detalhes {
   opacity: 1;
-  height: auto;
-  max-height: 15vh;
   color: rgb(var(--cor-letra-apagada));
   transform: translateY(0) scale(1);
   margin-bottom: 8.5px;
@@ -1354,8 +1352,6 @@ header .grupo-icones-navegacao span:hover {
   box-shadow: 5px 5px 10px rgba(var(--cor-sombra-apagada), 0.15);
   text-shadow: var(--text-shadow-letra);
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgb(var(--cor-branco-escuro)) rgb(var(--cor-branco-medio));
 }
 
 .card-atividade.aberto .card-detalhes::-webkit-scrollbar {
@@ -1363,14 +1359,14 @@ header .grupo-icones-navegacao span:hover {
 }
 
 .card-atividade.aberto .card-detalhes::-webkit-scrollbar-track {
-  background: rgb(var(--cor-branco-medio));
+  background: rgb(var(--cor-branco-claro));
   border-radius: 20px;
 }
 
 .card-atividade.aberto .card-detalhes::-webkit-scrollbar-thumb {
   background: rgb(var(--cor-branco-escuro));
   border-radius: 10px;
-  border: 2.2px solid rgb(var(--cor-branco-medio));
+  border: 2.2px solid rgb(var(--cor-branco-claro));
 }
 
 .card-atividade.aberto .card-detalhes::-webkit-scrollbar-thumb:hover {

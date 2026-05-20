@@ -4938,7 +4938,27 @@ function criarCardAtividadeProxima(item) {
   `;
 
   card.querySelector('.card-titulo').addEventListener('click', () => {
-    card.classList.toggle('aberto');
+    const d = card.querySelector('.card-detalhes');
+    const abrindo = !card.classList.contains('aberto');
+    const maxH = window.innerHeight * 0.15;
+
+    if (abrindo) {
+      const h = Math.min(d.scrollHeight, maxH);
+      card.style.setProperty('--detalhes-height', `${h}px`);
+      card.classList.add('aberto');
+      requestAnimationFrame(() => {
+        const hReal = Math.min(d.scrollHeight, maxH);
+        d.style.height = `${hReal}px`;
+        card.style.setProperty('--detalhes-height', `${hReal}px`);
+        d.scrollTop = 0;
+      });
+    } else {
+      d.style.height = `${d.offsetHeight}px`;
+      requestAnimationFrame(() => {
+        d.style.height = '0px';
+        card.classList.remove('aberto');
+      });
+    }
     atualizarAlturasCardsProximos();
   });
 
@@ -5341,7 +5361,27 @@ function criarCardAtividadeDia(item) {
   }, true); // capture=true para rodar antes dos filhos
 
   card.querySelector('.card-titulo').addEventListener('click', () => {
-    card.classList.toggle('aberto');
+    const d = card.querySelector('.card-detalhes');
+    const abrindo = !card.classList.contains('aberto');
+    const maxH = window.innerHeight * 0.15;
+
+    if (abrindo) {
+      const h = Math.min(d.scrollHeight, maxH);
+      card.style.setProperty('--detalhes-height', `${h}px`);
+      card.classList.add('aberto');
+      requestAnimationFrame(() => {
+        const hReal = Math.min(d.scrollHeight, maxH);
+        d.style.height = `${hReal}px`;
+        card.style.setProperty('--detalhes-height', `${hReal}px`);
+        d.scrollTop = 0;
+      });
+    } else {
+      d.style.height = `${d.offsetHeight}px`;
+      requestAnimationFrame(() => {
+        d.style.height = '0px';
+        card.classList.remove('aberto');
+      });
+    }
     atualizarAlturasCardsAtividade();
   });
 
