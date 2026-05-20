@@ -1,4 +1,4 @@
-const CACHE = 'quadro-v1.4'; // sincronize com "version" no package.json
+const CACHE = 'quadro-v1.5'; // sincronize com "version" no package.json
 const STATIC = [
   '/',
   '/index.html',

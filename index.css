@@ -1206,8 +1206,6 @@ header .grupo-icones-navegacao span:hover {
    CARDS DE ATIVIDADE
    ============================================================ */
 .card-atividade {
-  content-visibility: auto;
-  contain-intrinsic-size: 0 88.5px;
   flex-shrink: 0;
   padding: 10px 13.5px 8.5px;
   border-radius: 20px;
