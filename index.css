@@ -1344,7 +1344,8 @@ header .grupo-icones-navegacao span:hover {
 
 .card-atividade.aberto .card-detalhes {
   opacity: 1;
-  height: fit-content;
+  height: auto;
+  max-height: 15vh;
   color: rgb(var(--cor-letra-apagada));
   transform: translateY(0) scale(1);
   margin-bottom: 8.5px;
@@ -1352,6 +1353,28 @@ header .grupo-icones-navegacao span:hover {
   border: 1.5px solid rgb(var(--cor-cinza-borda));
   box-shadow: 5px 5px 10px rgba(var(--cor-sombra-apagada), 0.15);
   text-shadow: var(--text-shadow-letra);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--cor-branco-escuro)) rgb(var(--cor-branco-medio));
+}
+
+.card-atividade.aberto .card-detalhes::-webkit-scrollbar {
+  width: 10px;
+}
+
+.card-atividade.aberto .card-detalhes::-webkit-scrollbar-track {
+  background: rgb(var(--cor-branco-medio));
+  border-radius: 20px;
+}
+
+.card-atividade.aberto .card-detalhes::-webkit-scrollbar-thumb {
+  background: rgb(var(--cor-branco-escuro));
+  border-radius: 10px;
+  border: 2.2px solid rgb(var(--cor-branco-medio));
+}
+
+.card-atividade.aberto .card-detalhes::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--cor-letra-apagada));
 }
 
 /* Detalhes no card de prévia do modal-manual — scroll quando aberto */
@@ -1375,33 +1398,6 @@ header .grupo-icones-navegacao span:hover {
 }
 
 #manual-card-preview.aberto .card-detalhes::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--cor-letra-apagada));
-}
-
-/* Detalhes nos cards do calendário e do próximo — max-height + scroll */
-.card-atividade.aberto .card-detalhes {
-  max-height: 15vh;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgb(var(--cor-branco-escuro)) rgb(var(--cor-branco-medio));
-}
-
-.card-atividade.aberto .card-detalhes::-webkit-scrollbar {
-  width: 10px;
-}
-
-.card-atividade.aberto .card-detalhes::-webkit-scrollbar-track {
-  background: rgb(var(--cor-branco-medio));
-  border-radius: 20px;
-}
-
-.card-atividade.aberto .card-detalhes::-webkit-scrollbar-thumb {
-  background: rgb(var(--cor-branco-escuro));
-  border-radius: 10px;
-  border: 2.2px solid rgb(var(--cor-branco-medio));
-}
-
-.card-atividade.aberto .card-detalhes::-webkit-scrollbar-thumb:hover {
   background: rgb(var(--cor-letra-apagada));
 }
 
