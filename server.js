@@ -65,23 +65,25 @@ function servirArquivoEstatico(req, res) {
       return res.end('Arquivo não encontrado: ' + urlPath);
     }
     const headers = {
-    'Content-Type': obterMimeTypePorExtensao(ext)
-    };
+  'Content-Type': obterMimeTypePorExtensao(ext)
+};
 
-    if (urlPath === '/sw.js' || urlPath === '/index.html') {
-      headers['Cache-Control'] =
-        'no-store, no-cache, must-revalidate, proxy-revalidate';
+if (urlPath === '/sw.js') {
+  headers['Cache-Control'] = 'no-store, no-cache, must-revalidate';
+  headers['Pragma'] = 'no-cache';
+  headers['Expires'] = '0';
+}
 
-      headers['Pragma'] = 'no-cache';
-      headers['Expires'] = '0';
-    }
+if (
+  urlPath === '/index.html' ||
+  urlPath === '/index.css' ||
+  urlPath === '/index.js'
+) {
+  headers['Cache-Control'] = 'no-cache, must-revalidate';
+}
 
-    if (urlPath === '/index.css' || urlPath === '/index.js') {
-      headers['Cache-Control'] = 'no-cache, must-revalidate';
-    }
-
-    res.writeHead(200, headers);
-    res.end(content);
+res.writeHead(200, headers);
+res.end(content);
   });
 }
 
