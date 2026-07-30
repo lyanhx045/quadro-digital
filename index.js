@@ -914,7 +914,7 @@ function formatarDataParaComparacao(dia, mes, ano) {
       --cor-branco-claro:       26, 28, 35;
       --cor-branco-medio:       22, 24, 30;
       --cor-branco-escuro:      60, 68, 82;
-      --cor-cinza-borda:        45, 48, 58;
+      --cor-cinza-borda:        22, 22, 27;
       --cor-icone-senha:        90, 100, 115;
       --cor-cinza-fundo:        15, 16, 20;
       --cor-relevo-claro:       26, 28, 35;
@@ -1352,14 +1352,23 @@ const conteudoAbas = {
 
 // conteudo-tipo é sempre remontado ao trocar de aba
 
+// Flag compartilhada: indica se #conteudo-tipo está realmente visível.
+// Usada pelas animações contínuas (relógio/globo de materiais) para
+// pausar o trabalho pesado quando algo cobre o conteúdo sem desmontá-lo
+// (ex: um modal), além do caso normal de troca de aba (que já para
+// sozinho via isConnected, pois limparConteudo() desmonta os nós).
+let conteudoTipoVisivel = true;
+
 function mostrarConteudo() {
   conteudoTipo.style.opacity = '1';
   conteudoTipo.style.pointerEvents = 'auto';
+  conteudoTipoVisivel = true;
 }
 
 function esconderConteudo() {
   conteudoTipo.style.opacity = '0';
   conteudoTipo.style.pointerEvents = 'none';
+  conteudoTipoVisivel = false;
 }
 
 function _garantirSalaLogada() {
@@ -1465,10 +1474,10 @@ function montarPainelConfig() {
 
   // ── HTML dos dois blocos ──
   conteudoTipo.innerHTML = `
-    <div class="container-largura-total" style="display:flex;flex-direction:column;gap:2vh;padding:2vh 20px 20px 20px;overflow-y:auto;overflow-x:hidden;max-height:100%;scrollbar-width:none;touch-action:pan-y;">
+    <div class="container-largura-total">
 
       <!-- Aparência -->
-      <div class="tema-container">
+      <div class="tema-container-aparencia">
         <h2 class="texto-config">Aparência:</h2>
         <div class="modo-slider" id="cfg-modo-slider">
           ${[0,1,2].map(i => `
@@ -1490,7 +1499,7 @@ function montarPainelConfig() {
       </div>
 
       <!-- Exibição -->
-      <div class="tema-container">
+      <div class="tema-container-exibicao">
         <h2 class="texto-config">Exibição:</h2>
         <div class="painel-exibir">
           <button id="exibir-sala">sala</button>
@@ -1594,7 +1603,7 @@ function montarPainelConfig() {
     --cor-branco-claro:       26, 28, 35;
     --cor-branco-medio:       22, 24, 30;
     --cor-branco-escuro:      60, 68, 82;
-    --cor-cinza-borda:        45, 48, 58;
+    --cor-cinza-borda:        22, 22, 27;
     --cor-icone-senha:        90, 100, 115;
     --cor-cinza-fundo:        15, 16, 20;
     --cor-relevo-claro:       26, 28, 35;
@@ -1903,9 +1912,10 @@ function _renderEstruturaMateriais() {
           <div class="parte-fixa-material">
             <span class="texto-fixo-material"><h2>HORÁRIO</h2><h3>grade de aulas</h3></span>
             <span class="icone-fixo-material">
-              <svg id="icone-relogio-carga" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>
-              <svg id="icone-relogio-carga-h" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4"/></svg>
-              <svg id="icone-relogio-carga-min" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6v6"/></svg>
+              <svg id="icone-relogio" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" stroke-linecap="round" stroke-linejoin="round">
+                <g id="relogio-ponteiros"></g>
+                <circle cx="12" cy="12" r="10"/>
+              </svg>
             </span>
           </div>
           <div class="card-carga" id="card-carga-horario">
@@ -2226,10 +2236,21 @@ function _iniciarCardDrive() {
 }
 
 function _iniciarRelogioMateriais() {
-  const elMin  = conteudoTipo.querySelector('#icone-relogio-carga-min path');
-  const elHora = conteudoTipo.querySelector('#icone-relogio-carga-h path');
-  const cardRel = conteudoTipo.querySelector('#material-horario');
-  if (!elMin || !elHora) return;
+  const ponteiros = conteudoTipo.querySelector('#relogio-ponteiros');
+  const cardRel   = conteudoTipo.querySelector('#material-horario');
+  if (!ponteiros) return;
+
+  const ponteirosDef = [
+    { id: 'icone-relogio-carga-h',   d: 'M12 8v4' },
+    { id: 'icone-relogio-carga-min', d: 'M12 6v6' },
+  ];
+  const [elHora, elMin] = ponteirosDef.map(({ id, d }) => {
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('id', id);
+    p.setAttribute('d', d);
+    ponteiros.appendChild(p);
+    return p;
+  });
 
   let speed = 1, degMin = 0, degHora = 0, lastTs = null;
   if (cardRel) {
@@ -2238,7 +2259,14 @@ function _iniciarRelogioMateriais() {
   }
 
   function tick(ts) {
-    if (!elMin.isConnected) return;
+    if (!elMin.isConnected) return; // aba trocada / conteúdo desmontado: encerra de vez
+    if (document.hidden || !conteudoTipoVisivel) {
+      // aba do navegador em 2º plano ou conteúdo coberto (ex: modal):
+      // não faz o trabalho, só mantém o loop pronto pra retomar sem pulo
+      lastTs = null;
+      requestAnimationFrame(tick);
+      return;
+    }
     if (lastTs !== null) {
       const dt = ts - lastTs;
       degMin  += (dt / 30000)  * 360 * speed;
@@ -2292,14 +2320,30 @@ function _iniciarGloboMateriais() {
   const cardPlat = conteudoTipo.querySelector('#material-plataformas');
   if(cardPlat){cardPlat.addEventListener('mouseenter',()=>globeSpeed=5);cardPlat.addEventListener('mouseleave',()=>globeSpeed=0.75);}
 
-  function tick(){
-    if(!globeGroup.isConnected) return;
+  // O redesenho (trig + sort + reconstrução do "d" de cada continente) é a
+  // parte pesada; ~30fps já é imperceptível numa rotação lenta e decorativa
+  // como essa, e corta essa conta pela metade. O ângulo continua acumulando
+  // a cada frame pra a velocidade de rotação não mudar — só o repaint é
+  // limitado.
+  let _ultimoFrameGlobo = 0;
+  const _intervaloFrameGlobo = 1000 / 30;
+
+  function tick(ts){
+    if(!globeGroup.isConnected) return; // aba trocada / conteúdo desmontado: encerra de vez
+    if (document.hidden || !conteudoTipoVisivel) {
+      // aba do navegador em 2º plano ou conteúdo coberto (ex: modal): pausa
+      requestAnimationFrame(tick);
+      return;
+    }
     globeAngle+=0.012*globeSpeed;
-    continents.map((pts,i)=>({i,z:meanZ(pts)})).sort((a,b)=>a.z-b.z).forEach(({i,z})=>{
-      globePaths[i].setAttribute('d',buildPath(continents[i]));
-      globePaths[i].setAttribute('opacity',(z<0?0:Math.min(1,z*3+0.25)).toFixed(3));
-      globeGroup.appendChild(globePaths[i]);
-    });
+    if (ts - _ultimoFrameGlobo >= _intervaloFrameGlobo) {
+      _ultimoFrameGlobo = ts;
+      continents.map((pts,i)=>({i,z:meanZ(pts)})).sort((a,b)=>a.z-b.z).forEach(({i,z})=>{
+        globePaths[i].setAttribute('d',buildPath(continents[i]));
+        globePaths[i].setAttribute('opacity',(z<0?0:Math.min(1,z*3+0.25)).toFixed(3));
+        globeGroup.appendChild(globePaths[i]);
+      });
+    }
     requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);

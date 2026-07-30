@@ -2032,10 +2032,7 @@ header .grupo-icones-navegacao span:hover {
   justify-content: start;
   align-items: center;
   position: absolute;
-  top: calc((37.5px - 2vh)/2);
-  left: calc(37.5px - 2vh);
   height: 5vh;
-  font-size: 110%;
   background: rgb(var(--cor-letra));
   -webkit-background-clip: text;
   background-clip: text;
@@ -2044,9 +2041,9 @@ header .grupo-icones-navegacao span:hover {
 }
 
 .nome-campo {
-  top: 0.65vh !important;
-  left: 2vh !important;
-  font-size: 95% !important;
+  top: 0.65vh;
+  left: 2vh;
+  font-size: 95%;
 }
 
 
@@ -3765,7 +3762,7 @@ li.erro-envio #entrada-link + .preview-link {
 
 .card-material.material-aberto .texto-fixo-material h3 {
   transform: translate(-35%, -7.5px);
-  opacity: 0;
+  opacity: 0 !important;
 }
 
 .card-material.material-aberto .parte-fixa-material {
@@ -3802,7 +3799,7 @@ li.erro-envio #entrada-link + .preview-link {
 .card-material {
   width: 350px;
   height: 115px;
-  border-radius: 18.5px;
+  border-radius: 25px;
   transition: 
   opacity 0.1s ease,
   all 0.6s;
@@ -3816,12 +3813,47 @@ li.erro-envio #entrada-link + .preview-link {
   z-index: 3;
 }
 
-.card-material:not(.material-aberto):hover {
-  background: rgba(var(--cor-material), 0.15);
+.card-material {
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.card-material::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+
+  background: radial-gradient(
+    circle at 50% 55%,
+    rgba(var(--cor-material), 0.70),
+    rgba(var(--cor-material), 0.20) 45%,
+    transparent 75%
+  );
+
   box-shadow:
-    0 0 15px rgba(var(--cor-material), 0.25),
-    inset -3px -3px 6px rgba(var(--cor-inset-claro), 0.125),
-    inset  3px  3px 6px rgba(var(--cor-inset-escuro), 0.05);
+    inset 0 0 2.8em rgba(var(--cor-material), 0.45),
+    inset 0 0 7em rgba(var(--cor-material), 0.15);
+
+  filter: blur(1em);
+  opacity: 0;
+  transition: all 0.6s;
+}
+
+.card-material:not(.material-aberto):hover::before {
+  animation: respirar-card-material 3s ease-in-out infinite;
+}
+
+@keyframes respirar-card-material {
+  0%, 100% {
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 0.55;
+  }
 }
 
 .parte-fixa-material {
@@ -3848,7 +3880,7 @@ li.erro-envio #entrada-link + .preview-link {
   height: 50px;
   aspect-ratio: 1/1;
   stroke: rgb(var(--cor-letra-apagada));
-  filter: url(#cutout);
+  filter: drop-shadow(3px 3px 4px rgba(var(--cor-sombra-apagada), 0.15));
   fill: none;
   stroke-width: 2.25;
   position: absolute;
@@ -3857,9 +3889,16 @@ li.erro-envio #entrada-link + .preview-link {
 
 .card-material:hover .icone-fixo-material svg {
   stroke: rgb(var(--cor-material-escuro));
-  filter: url(#filtro-relevo-seta)
-  drop-shadow(0 0 15px rgba(var(--cor-material-escuro), 0.5));
+  filter: drop-shadow(3px 3px 4px rgba(var(--cor-material-escuro), 0.5));
 }
+
+/* #icone-relogio e #icone-globo têm animação interna contínua (ponteiros
+   e continentes se mexendo o tempo todo). O filtro de relevo acima usa
+   feMorphology + feGaussianBlur em várias camadas, que o navegador precisa
+   recalcular por inteiro a cada frame da animação — isso é o que mais pesa
+   nesses dois ícones em aparelhos mais fracos. Aqui eles usam um
+   drop-shadow simples (bem mais barato) no lugar, tanto em repouso quanto
+   no hover; os demais ícones de materiais continuam com o relevo normal. */
 
 #icone-pasta-meio-drive {
   stroke: none !important;
@@ -3896,12 +3935,10 @@ li.erro-envio #entrada-link + .preview-link {
 
 .texto-fixo-material h2,
 .texto-fixo-material h3{
-  background: rgb(var(--cor-letra-apagada));
-  -webkit-background-clip: text !important;
-  background-clip: text !important;
-  color: transparent !important;
-  text-shadow: -1.5px 2px 2px rgba(var(--cor-relevo-material), 0.4);
+  color: rgb(var(--cor-letra-apagada));
+  text-shadow: 3px 3px 4px rgba(var(--cor-sombra-apagada), 0.15);
   position: absolute;
+  opacity: 0.85;
 }
 
 .texto-fixo-material h2 {
@@ -3921,9 +3958,10 @@ li.erro-envio #entrada-link + .preview-link {
 
 .card-material:hover .texto-fixo-material h2,
 .card-material:hover .texto-fixo-material h3 {
-  background: rgb(var(--cor-material-escuro));
-  text-shadow:  -1.5px 2px 2px rgba(var(--cor-relevo-material), 0.4),
-                0 0 15px rgba(var(--cor-material-escuro), 0.6);
+  color: rgb(var(--cor-material-escuro));
+  text-shadow:  3px 3px 4px rgba(var(--cor-sombra-apagada), 0.05),
+                0 0 15px rgba(var(--cor-material-escuro), 0.75);
+  opacity: 1;
 }
 
 .card-material:hover .label-dia {
@@ -5076,7 +5114,7 @@ li.erro-envio #entrada-link + .preview-link {
 
 .modo-slider {
   width: calc(45px + 2vh);
-  height: calc(135px + 2vh + 2vh);
+  height: calc(135px + 2vh + 2vh + 8px);
   padding: 1vh;
   background: rgb(var(--cor-branco-claro));
   border-radius: 50px;
@@ -5085,8 +5123,10 @@ li.erro-envio #entrada-link + .preview-link {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1vh;
-  position: relative;
+  gap: calc(1vh + 4px);
+  position: absolute;
+  bottom: 1.6vh;
+  left: 1.5vh;
 }
 
 .icone-modo {  
@@ -5143,7 +5183,7 @@ li.erro-envio #entrada-link + .preview-link {
 }
 .painel-cor {
   width: calc((350px - 3vh) - 45px - 2vh - 1.25vh);
-  height: calc(135px + 4vh);
+  height: calc(135px + 4vh + 8px);
   background: rgb(var(--cor-branco-claro));
   border-radius: 22.5px;
   outline: 1.5px solid rgb(var(--cor-cinza-borda));
@@ -5166,8 +5206,11 @@ li.erro-envio #entrada-link + .preview-link {
       (135px + 4vh)
       - (2 * (1.5vh + 6.25px))
       - 105px
-    ) / 2
+    ) / 2 + 4px
   );
+  position: absolute;
+  bottom: 1.6vh;
+  right: 1.5vh;
 }
 
 #cfg-esfera-0  { --esfera-claro: var(--tom-azul-claro);      --esfera-escuro: var(--tom-azul-escuro);      }
@@ -5196,11 +5239,35 @@ li.erro-envio #entrada-link + .preview-link {
   justify-content: center;
 }
 
-.tema-container {
+.texto-config {
+  top: calc((37.5px - 2vh)/2);
+  left: calc(37.5px - 2vh);
+  font-size: 110%;
+}
+
+.container-largura-total {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75vh;
+  padding: 2vh 20px 20px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: 100%;
+  scrollbar-width: none;
+  touch-action: pan-y;
+}
+
+.container-largura-total::-webkit-scrollbar {
+  display: none;
+}
+
+.tema-container-aparencia .texto-config {
+  top: calc((95px - 7.76vh - 8px) / 2);
+}
+
+.tema-container-aparencia, .tema-container-exibicao {
   width: 350px;
   display: flex;
-  gap: 1.25vh;
-  padding: calc(1.5vh + 42.5px) 1.5vh 1.5vh 1.5vh;
   background: rgba(var(--cor-letra-apagada), 0.075);
   box-shadow:
     inset -3px -3px 6px rgba(var(--cor-inset-claro), 0.075),
@@ -5208,6 +5275,16 @@ li.erro-envio #entrada-link + .preview-link {
   height: fit-content;
   border-radius: 25px;
   position: relative;
+}
+
+.tema-container-exibicao {
+  height: 115px;
+  padding: calc(1.5vh + 42.5px) 1.5vh 1.5vh 1.5vh;
+}
+
+.tema-container-aparencia {
+  height: calc(115px * 2 + 1.75vh);
+  padding: calc(1.5vh + 42.5px) 1.5vh 1.5vh 1.5vh;
 }
 
 .painel-cor span.painel-cor-esfera {
@@ -5261,14 +5338,14 @@ li.erro-envio #entrada-link + .preview-link {
   opacity: 0.8;
 }
 
-#exibir-sala:hover, #exibir-sala.exibindo {
+#exibir-sala.exibindo {
   background: rgb(var(--cor-principal-claro));
   text-shadow:
     0 0 5px rgba(var(--cor-principal-claro), 0.35),
    -1.5px 2px 2px rgba(var(--cor-relevo-claro), 0.35);
 }
 
-#exibir-casa:hover, #exibir-casa.exibindo {
+#exibir-casa.exibindo {
   background: rgb(var(--cor-principal-escuro));
   text-shadow:
     0 0 5px rgba(var(--cor-principal-escuro), 0.35),

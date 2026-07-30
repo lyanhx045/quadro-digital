@@ -249,11 +249,28 @@
   };
 </script>
 <script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js');
-    });
-  }
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      const registro = await navigator.serviceWorker.register('/sw.js', {
+        updateViaCache: 'none'
+      });
+
+      await registro.update();
+
+      let recarregando = false;
+
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (recarregando) return;
+
+        recarregando = true;
+        location.reload();
+      });
+    } catch (erro) {
+      console.error('Erro ao atualizar o site:', erro);
+    }
+  });
+}
 </script>
 <script src="index.js" defer></script>
 </body>

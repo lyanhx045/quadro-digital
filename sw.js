@@ -1,36 +1,108 @@
-const CACHE = 'quadro-v1.5'; // sincronize com "version" no package.json
-const STATIC = [
-  '/',
+const CACHE = 'quadro-v1.6';
+
+const ARQUIVOS_OFFLINE = [
   '/index.html',
   '/index.css',
   '/index.js',
   '/manifest.json'
 ];
 
-self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(STATIC))
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE).then(async cache => {
+      for (const arquivo of ARQUIVOS_OFFLINE) {
+        const resposta = await fetch(arquivo, {
+          cache: 'no-store'
+        });
+
+        if (resposta.ok) {
+          await cache.put(arquivo, resposta);
+        }
+      }
+    })
   );
+
   self.skipWaiting();
 });
 
-self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    )
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    (async () => {
+      const cachesExistentes = await caches.keys();
+
+      await Promise.all(
+        cachesExistentes
+          .filter(nome => nome.startsWith('quadro-') && nome !== CACHE)
+          .map(nome => caches.delete(nome))
+      );
+
+      await self.clients.claim();
+    })()
   );
-  self.clients.claim();
 });
 
-self.addEventListener('fetch', e => {
-  // Requisições de API sempre vão pra rede
-  if (e.request.url.includes('/api/')) {
-    e.respondWith(fetch(e.request));
+self.addEventListener('fetch', event => {
+  const requisicao = event.request;
+
+  if (requisicao.method !== 'GET') return;
+
+  const url = new URL(requisicao.url);
+
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith('/api/')) return;
+
+  const arquivoPrincipal =
+    requisicao.mode === 'navigate' ||
+    url.pathname === '/' ||
+    url.pathname === '/index.html' ||
+    url.pathname === '/index.css' ||
+    url.pathname === '/index.js';
+
+  if (arquivoPrincipal) {
+    event.respondWith(
+      (async () => {
+        try {
+          const respostaNova = await fetch(requisicao, {
+            cache: 'no-store'
+          });
+
+          if (respostaNova.ok) {
+            const cache = await caches.open(CACHE);
+            await cache.put(requisicao, respostaNova.clone());
+          }
+
+          return respostaNova;
+        } catch {
+          const respostaSalva = await caches.match(requisicao, {
+            ignoreSearch: true
+          });
+
+          if (respostaSalva) return respostaSalva;
+
+          if (requisicao.mode === 'navigate') {
+            return caches.match('/index.html');
+          }
+
+          return Response.error();
+        }
+      })()
+    );
+
     return;
   }
-  // Resto: cache first, fallback pra rede
-  e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
+
+  event.respondWith(
+    caches.match(requisicao).then(respostaSalva => {
+      if (respostaSalva) return respostaSalva;
+
+      return fetch(requisicao).then(async respostaNova => {
+        if (respostaNova.ok) {
+          const cache = await caches.open(CACHE);
+          await cache.put(requisicao, respostaNova.clone());
+        }
+
+        return respostaNova;
+      });
+    })
   );
 });
