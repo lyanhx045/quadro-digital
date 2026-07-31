@@ -6,6 +6,7 @@ const path = require('path');
 const { IncomingForm } = require('formidable');
 const { createClient } = require('@supabase/supabase-js');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 const PORT = process.env.PORT || 3000;
 const RAIZ = __dirname;
@@ -16,6 +17,135 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
+const SEGREDO_SESSAO = crypto
+  .createHash('sha256')
+  .update(`${process.env.SUPABASE_SERVICE_ROLE_KEY}:sessao-admin`)
+  .digest();
+
+const DURACAO_SESSAO = 8 * 60 * 60 * 1000;
+
+function criarTokenSessao(dados) {
+  const payload = Buffer.from(JSON.stringify({
+    ...dados,
+    expiraEm: Date.now() + DURACAO_SESSAO,
+  })).toString('base64url');
+
+  const assinatura = crypto
+    .createHmac('sha256', SEGREDO_SESSAO)
+    .update(payload)
+    .digest('base64url');
+
+  return `${payload}.${assinatura}`;
+}
+
+function validarTokenSessao(token) {
+  try {
+    const [payload, assinaturaRecebida] = String(token || '').split('.');
+    if (!payload || !assinaturaRecebida) return null;
+
+    const assinaturaEsperada = crypto
+      .createHmac('sha256', SEGREDO_SESSAO)
+      .update(payload)
+      .digest('base64url');
+
+    const recebida = Buffer.from(assinaturaRecebida);
+    const esperada = Buffer.from(assinaturaEsperada);
+
+    if (
+      recebida.length !== esperada.length ||
+      !crypto.timingSafeEqual(recebida, esperada)
+    ) {
+      return null;
+    }
+
+    const sessao = JSON.parse(
+      Buffer.from(payload, 'base64url').toString('utf8')
+    );
+
+    if (!sessao.expiraEm || Date.now() >= sessao.expiraEm) {
+      return null;
+    }
+
+    return sessao;
+  } catch {
+    return null;
+  }
+}
+
+function lerCookies(req) {
+  const cookies = {};
+
+  String(req.headers.cookie || '').split(';').forEach(parte => {
+    const separador = parte.indexOf('=');
+    if (separador === -1) return;
+
+    const nome = parte.slice(0, separador).trim();
+    const valor = parte.slice(separador + 1).trim();
+
+    if (nome) cookies[nome] = valor;
+  });
+
+  return cookies;
+}
+
+function obterSessaoAdmin(req) {
+  const cookies = lerCookies(req);
+  const sessao = validarTokenSessao(cookies.sessao_admin);
+
+  if (!sessao || sessao.tipo !== 'admin') return null;
+  return sessao;
+}
+
+function criarCookieSessao(token) {
+  const seguro = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+
+  return [
+    `sessao_admin=${token}`,
+    'HttpOnly',
+    'Path=/',
+    'SameSite=Strict',
+    'Max-Age=28800',
+  ].join('; ') + seguro;
+}
+
+function criarCookieLogout() {
+  const seguro = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+
+  return [
+    'sessao_admin=',
+    'HttpOnly',
+    'Path=/',
+    'SameSite=Strict',
+    'Max-Age=0',
+  ].join('; ') + seguro;
+}
+
+function resolverSalaDaGravacao(req, salaSolicitada) {
+  const salaUsuario = Number(req.sessaoAdmin?.sala_id);
+
+  if (!Number.isInteger(salaUsuario)) return null;
+
+  if (salaUsuario !== 0) {
+    return salaUsuario;
+  }
+
+  const salaAlvo = Number(salaSolicitada);
+
+  if (!Number.isInteger(salaAlvo) || salaAlvo <= 0) {
+    return null;
+  }
+
+  return salaAlvo;
+}
+
+function restringirQueryASala(query, req) {
+  const salaUsuario = Number(req.sessaoAdmin?.sala_id);
+
+  if (salaUsuario === 0) return query;
+
+  return query.eq('sala_id', salaUsuario);
+}
 
 // Matérias do seletor do formulário
 const MATERIAS = ['MATEMÁTICA', 'ITINERÁRIO', 'LINGUAGENS', 'HUMANAS', 'NATUREZA'];
@@ -141,7 +271,7 @@ const server = http.createServer(async (req, res) => {
     req.on('data', chunk => { body += chunk; });
     req.on('end', async () => {
       try {
-        const { username, senha } = JSON.parse(body);
+        const { username, senha, sala_id } = JSON.parse(body);
 
         if (!username) {
           res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -172,7 +302,27 @@ const server = http.createServer(async (req, res) => {
           return res.end(JSON.stringify({ error: 'senha_incorreta' }));
         }
 
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        const salaIdUsuario = Number(data.sala_id);
+        const salaIdAtual = Number(sala_id);
+
+        if (salaIdUsuario !== 0 && salaIdUsuario !== salaIdAtual) {
+          res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify({ error: 'usuario_nao_encontrado' }));
+        }
+
+        const tokenSessao = criarTokenSessao({
+          tipo:     'admin',
+          id:       data.id,
+          username: data.username,
+          role:     data.role,
+          sala_id:  data.sala_id,
+        });
+
+        res.writeHead(200, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'Set-Cookie': criarCookieSessao(tokenSessao),
+        });
         return res.end(JSON.stringify({
           id:       data.id,
           username: data.username,
@@ -186,6 +336,36 @@ const server = http.createServer(async (req, res) => {
       }
     });
     return;
+  }
+
+  // --- API: encerrar sessão administrativa
+  if (req.method === 'POST' && urlPath === '/api/logout') {
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'Set-Cookie': criarCookieLogout(),
+    });
+
+    return res.end(JSON.stringify({ ok: true }));
+  }
+
+  const metodoProtegido = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
+
+  if (metodoProtegido) {
+    const sessaoAdmin = obterSessaoAdmin(req);
+
+    if (!sessaoAdmin) {
+      res.writeHead(401, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+      });
+
+      return res.end(JSON.stringify({
+        error: 'Não autorizado',
+      }));
+    }
+
+    req.sessaoAdmin = sessaoAdmin;
   }
 
   // --- API: gerar link temporário para um anexo (GET /api/anexo?path=...)
@@ -310,6 +490,15 @@ const server = http.createServer(async (req, res) => {
     req.on('end', async () => {
       try {
         const campos = JSON.parse(body);
+        const sala_id = resolverSalaDaGravacao(req, campos.sala_id);
+
+        if (sala_id === null) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify({ error: 'Sala não autorizada' }));
+        }
+
+        campos.sala_id = sala_id;
+
         // Resolve nome → professor_id se vier o campo "professor" (nome)
         if (campos.professor && !campos.professor_id) {
           const { data: prof } = await supabase
@@ -343,6 +532,8 @@ const server = http.createServer(async (req, res) => {
     req.on('end', async () => {
       try {
         const campos = JSON.parse(body);
+        delete campos.sala_id;
+
         // Resolve nome → professor_id se vier o campo "professor" (nome)
         if (campos.professor && !campos.professor_id) {
           const { data: prof } = await supabase
@@ -353,11 +544,28 @@ const server = http.createServer(async (req, res) => {
           campos.professor_id = prof ? prof.id : null;
           delete campos.professor;
         }
-        const { error } = await supabase.from('drives').update(campos).eq('id', id);
+
+        let query = supabase
+          .from('drives')
+          .update(campos)
+          .eq('id', id);
+
+        query = restringirQueryASala(query, req);
+
+        const { data, error } = await query
+          .select('id')
+          .maybeSingle();
+
         if (error) {
           res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
           return res.end(JSON.stringify({ error: error.message }));
         }
+
+        if (!data) {
+          res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify({ error: 'Drive não encontrado nesta sala' }));
+        }
+
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         return res.end(JSON.stringify({ ok: true }));
       } catch (e) {
@@ -372,11 +580,28 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'DELETE' && urlPath.startsWith('/api/drives/')) {
     try {
       const id = urlPath.split('/').pop();
-      const { error } = await supabase.from('drives').delete().eq('id', id);
+
+      let query = supabase
+        .from('drives')
+        .delete()
+        .eq('id', id);
+
+      query = restringirQueryASala(query, req);
+
+      const { data, error } = await query
+        .select('id')
+        .maybeSingle();
+
       if (error) {
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         return res.end(JSON.stringify({ error: error.message }));
       }
+
+      if (!data) {
+        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ error: 'Drive não encontrado nesta sala' }));
+      }
+
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end(JSON.stringify({ ok: true }));
     } catch (e) {
@@ -386,7 +611,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // --- API: editar/criar aula na grade (PUT /api/grade-aulas)
-  // Upsert por (dia_semana, posicao)
+  // Upsert por (sala_id, dia_semana, posicao)
   if (req.method === 'PUT' && urlPath === '/api/grade-aulas') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
@@ -394,35 +619,61 @@ const server = http.createServer(async (req, res) => {
       try {
         const campos = JSON.parse(body);
         const { dia_semana, posicao, area } = campos;
+        const sala_id = resolverSalaDaGravacao(req, campos.sala_id);
         let professor_id = campos.professor_id ?? null;
+
+        if (sala_id === null) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          return res.end(JSON.stringify({ error: 'Sala não autorizada' }));
+        }
 
         // Resolve nome → professor_id se vier o campo "professor" (nome) sem o id
         if (campos.professor && !professor_id) {
-          const { data: prof } = await supabase
+          const { data: prof, error: erroProfessor } = await supabase
             .from('professores')
             .select('id')
             .eq('nome', campos.professor)
             .maybeSingle();
+
+          if (erroProfessor) throw erroProfessor;
           professor_id = prof ? prof.id : null;
         }
 
-        // Tenta atualizar; se não existir, insere
-        const { data: existing } = await supabase
+        // Tenta atualizar na sala atual; se não existir, insere
+        const { data: existing, error: erroBusca } = await supabase
           .from('grade_aulas')
           .select('id')
+          .eq('sala_id', sala_id)
           .eq('dia_semana', dia_semana)
           .eq('posicao', posicao)
           .maybeSingle();
+
+        if (erroBusca) throw erroBusca;
+
         let error;
+
         if (existing) {
-          ({ error } = await supabase.from('grade_aulas').update({ area, professor_id }).eq('id', existing.id));
+          ({ error } = await supabase
+            .from('grade_aulas')
+            .update({ area, professor_id })
+            .eq('id', existing.id));
         } else {
-          ({ error } = await supabase.from('grade_aulas').insert([{ dia_semana, posicao, area, professor_id }]));
+          ({ error } = await supabase
+            .from('grade_aulas')
+            .insert([{
+              sala_id,
+              dia_semana,
+              posicao,
+              area,
+              professor_id,
+            }]));
         }
+
         if (error) {
           res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
           return res.end(JSON.stringify({ error: error.message }));
         }
+
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         return res.end(JSON.stringify({ ok: true }));
       } catch (e) {
@@ -531,14 +782,28 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'DELETE' && urlPath.startsWith('/api/atividades/')) {
     try {
       const id = urlPath.split('/').pop();
-      const { error } = await supabase
+
+      let query = supabase
         .from('atividades')
         .delete()
         .eq('id', id);
+
+      query = restringirQueryASala(query, req);
+
+      const { data, error } = await query
+        .select('id')
+        .maybeSingle();
+
       if (error) {
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         return res.end(JSON.stringify({ error: error.message }));
       }
+
+      if (!data) {
+        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ error: 'Atividade não encontrada nesta sala' }));
+      }
+
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end(JSON.stringify({ ok: true }));
     } catch (e) {
@@ -550,6 +815,29 @@ const server = http.createServer(async (req, res) => {
   // --- API: atualizar anexos de uma atividade (POST /api/atividades/:id/anexos)
   if (req.method === 'POST' && /^\/api\/atividades\/[^/]+\/anexos$/.test(urlPath)) {
     const id = urlPath.split('/')[3];
+
+    let queryAtividade = supabase
+      .from('atividades')
+      .select('id')
+      .eq('id', id);
+
+    queryAtividade = restringirQueryASala(queryAtividade, req);
+
+    const {
+      data: atividadePermitida,
+      error: erroAtividade,
+    } = await queryAtividade.maybeSingle();
+
+    if (erroAtividade) {
+      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ error: erroAtividade.message }));
+    }
+
+    if (!atividadePermitida) {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ error: 'Atividade não encontrada nesta sala' }));
+    }
+
     const form = new IncomingForm({ multiples: true, keepExtensions: true, allowEmptyFiles: true, minFileSize: 0 });
     form.parse(req, async (err, fields, files) => {
       if (err) {
@@ -607,6 +895,8 @@ const server = http.createServer(async (req, res) => {
       req.on('end', async () => {
         try {
           const campos = JSON.parse(body);
+          delete campos.sala_id;
+
           // Resolve nome → professor_id se vier o campo "professor" sem o id
           if (campos.professor && !campos.professor_id) {
             const { data: prof } = await supabase
@@ -617,14 +907,28 @@ const server = http.createServer(async (req, res) => {
             campos.professor_id = prof ? prof.id : null;
             delete campos.professor;
           }
-          const { error } = await supabase
+
+          let query = supabase
             .from('atividades')
             .update(campos)
             .eq('id', id);
+
+          query = restringirQueryASala(query, req);
+
+          const { data, error } = await query
+            .select('id')
+            .maybeSingle();
+
           if (error) {
             res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
             return res.end(JSON.stringify({ error: error.message }));
           }
+
+          if (!data) {
+            res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+            return res.end(JSON.stringify({ error: 'Atividade não encontrada nesta sala' }));
+          }
+
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           return res.end(JSON.stringify({ ok: true }));
         } catch (e) {
@@ -673,7 +977,16 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      const salaIdPost = get(fields['sala_id'] || '') || null;
+      const salaIdPost = resolverSalaDaGravacao(
+        req,
+        get(fields['sala_id'] || '')
+      );
+
+      if (salaIdPost === null) {
+        res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ error: 'Sala não autorizada' }));
+      }
+
       const novoRegistro = {
         area: MATERIAS[parseInt(get(fields['deslizador'] || '0'), 10)] || 'DESCONHECIDO',
         professor_id,
@@ -684,7 +997,7 @@ const server = http.createServer(async (req, res) => {
         descricao_detalhes: get(fields['entrada-detalhes'] || ''),
         anexo: false,
         arquivos: [],
-        ...(salaIdPost ? { sala_id: parseInt(salaIdPost, 10) } : {})
+        sala_id: salaIdPost,
       };
 
       let lista = files['arquivo'];

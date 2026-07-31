@@ -27,6 +27,56 @@ function _criarIconeCarregandoHTML() {
   );
 }
 
+
+/* ══════════════════════════════════════════════════════════
+   Escala responsiva por altura útil do navegador
+   ══════════════════════════════════════════════════════════ */
+(function configurarEscalaPorAltura() {
+  const ALTURA_BASE = 700;
+  let frameEscala = null;
+
+  function atualizarEscalaPorAltura() {
+    if (document.activeElement?.matches('input, textarea, select, [contenteditable="true"]')) {
+      return;
+    }
+
+    const alturaNavegador = window.innerHeight;
+    const escala = Math.min(1, alturaNavegador / ALTURA_BASE);
+
+    document.documentElement.style.setProperty(
+      '--escala-altura-interface',
+      escala
+    );
+  }
+
+  function solicitarAtualizacaoEscala() {
+    if (frameEscala !== null) {
+      cancelAnimationFrame(frameEscala);
+    }
+
+    frameEscala = requestAnimationFrame(function() {
+      frameEscala = null;
+      atualizarEscalaPorAltura();
+    });
+  }
+
+  atualizarEscalaPorAltura();
+  window.addEventListener('resize', solicitarAtualizacaoEscala);
+  window.addEventListener('orientationchange', solicitarAtualizacaoEscala);
+  document.addEventListener('focusout', solicitarAtualizacaoEscala);
+})();
+
+
+/* Converte uma antiga medida em vh usando --valor-vh definido no :root */
+function _vhFixoEmPx(valorVh) {
+  const valorConfigurado = getComputedStyle(document.documentElement)
+    .getPropertyValue('--valor-vh');
+  const valorBase = parseFloat(valorConfigurado);
+
+  return valorVh * (Number.isFinite(valorBase) ? valorBase : 7);
+}
+
+
 /* Garante tempo mínimo de exibição do ícone antes de executar o callback */
 function _comTempoMinimo(promessa, ms, callback) {
   const inicio = Date.now();
@@ -79,7 +129,11 @@ async function executarLoginRepre() {
     const r = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, senha }),
+      body: JSON.stringify({
+        username,
+        senha,
+        sala_id: window._salaAtual?.id,
+      }),
     });
     const data = await r.json();
 
@@ -1559,10 +1613,13 @@ function montarPainelConfig() {
   // ── Indicador ──
   const indicatorEl = document.getElementById('cfg-modo-atual');
   function positionIndicator(idx, animate) {
-    const sliderRect = document.getElementById('cfg-modo-slider').getBoundingClientRect();
-    const iconRect   = document.getElementById(`cfg-icone-${idx}`).getBoundingClientRect();
-    const top = iconRect.top + iconRect.height / 2 - sliderRect.top - indicatorEl.offsetHeight / 2;
-    indicatorEl.style.transition = animate ? 'top 0.5s cubic-bezier(0.4,0,0.2,1)' : 'none';
+    const iconEl = document.getElementById(`cfg-icone-${idx}`);
+    const top = iconEl.offsetTop + (iconEl.offsetHeight - indicatorEl.offsetHeight) / 2;
+
+    indicatorEl.style.transition = animate
+      ? 'top 0.5s cubic-bezier(0.4,0,0.2,1)'
+      : 'none';
+
     indicatorEl.style.top = top + 'px';
   }
 
@@ -2637,25 +2694,6 @@ const _htmlFormulario = `
    (equivalente ao index.js, executado no contexto do conteudo-tipo)
    ══════════════════════════════════════════════════════════ */
 function _inicializarLogicaFormulario(itemEdicao) {
-  const root = document.documentElement;
-  // --t é usado para "congelar" animações de erro no instante correto.
-  // Rodamos o tick apenas enquanto o formulário estiver montado.
-  let _tAnimStart = performance.now();
-  let _tRafId = null;
-  function _tickT() {
-    root.style.setProperty('--t', `${performance.now() - _tAnimStart}ms`);
-    _tRafId = requestAnimationFrame(_tickT);
-  }
-  _tRafId = requestAnimationFrame(_tickT);
-  // Cancela o tick quando o formulário for desmontado (limparConteudo chama innerHTML='')
-  const _formObserver = new MutationObserver(() => {
-    if (!document.getElementById('lista-campos-formulario')) {
-      cancelAnimationFrame(_tRafId);
-      _formObserver.disconnect();
-    }
-  });
-  _formObserver.observe(document.getElementById('conteudo-tipo') || document.body, { childList: true, subtree: false });
-
   const state = {
     descricoes: [0],
     currentIndex: 0,
@@ -3108,6 +3146,50 @@ function _inicializarLogicaFormulario(itemEdicao) {
       : ['André Ferro','Edney','Bruno','Vinicius','Domiciano','Rayan','Bruna','Gracielle','Vitor','Monara','André Almeida','Gustavo','Ricardo','Fontenelle','Maryana','Tobias'];
     const normalizar = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 
+    let sincronizacaoErroPendente = null;
+
+    const sincronizarAnimacoesErro = () => {
+      if (sincronizacaoErroPendente !== null) {
+        cancelAnimationFrame(sincronizacaoErroPendente);
+      }
+
+      sincronizacaoErroPendente = requestAnimationFrame(() => {
+        sincronizacaoErroPendente = null;
+
+        const valorDuracao = getComputedStyle(document.documentElement)
+          .getPropertyValue('--dur')
+          .trim();
+        const numeroDuracao = parseFloat(valorDuracao);
+        const duracao = Number.isFinite(numeroDuracao) && numeroDuracao > 0
+          ? (valorDuracao.endsWith('s') && !valorDuracao.endsWith('ms')
+              ? numeroDuracao * 1000
+              : numeroDuracao)
+          : 1500;
+
+        const tempoTimeline = document.timeline?.currentTime;
+        const agora = Number.isFinite(tempoTimeline)
+          ? tempoTimeline
+          : performance.now();
+        const faseGlobal = ((agora % duracao) + duracao) % duracao;
+
+        document.querySelectorAll(
+          '#formu li.erro-envio, ' +
+          '#botao-descricao-anterior.erro-guia, ' +
+          '#botao-descricao-seguinte.erro-guia'
+        ).forEach(elemento => {
+          elemento.getAnimations().forEach(animacao => {
+            if (
+              typeof animacao.animationName === 'string' &&
+              animacao.animationName.startsWith('vibracao-decrescente')
+            ) {
+              animacao.currentTime = faseGlobal;
+              animacao.play();
+            }
+          });
+        });
+      });
+    };
+
     const atualizarGuia = () => {
       const bd = document.getElementById('botao-descricao-anterior');
       const be = document.getElementById('botao-descricao-seguinte');
@@ -3120,6 +3202,7 @@ function _inicializarLogicaFormulario(itemEdicao) {
           else if (i > state.currentIndex) be.classList.add('erro-guia');
         }
       });
+      sincronizarAnimacoesErro();
     };
 
     const btnAdicionarDesc = document.getElementById('botao-adicionar-descricao');
@@ -4121,11 +4204,11 @@ function _vincularPreviaManual(overlay) {
       card.classList.remove('estado-com-anexo');
     }
 
-    // Atualiza altura do card-detalhes (clampado a 15vh — tamanho máximo do preview)
+    // Atualiza altura do card-detalhes (limitado a 15 vezes --valor-vh)
     const detDiv = card.querySelector('.card-detalhes');
     if (detDiv && card.classList.contains('aberto')) {
       requestAnimationFrame(() => {
-        const maxH = window.innerHeight * 0.15;
+        const maxH = _vhFixoEmPx(15);
         const hReal = Math.min(detDiv.scrollHeight, maxH);
         detDiv.style.height = `${hReal}px`;
         card.style.setProperty('--detalhes-height', `${hReal}px`);
@@ -4168,7 +4251,7 @@ function _vincularPreviaManual(overlay) {
     tituloEl.addEventListener('click', () => {
       const d = card.querySelector('.card-detalhes');
       const abrindo = !card.classList.contains('aberto');
-      const maxH = window.innerHeight * 0.15;
+      const maxH = _vhFixoEmPx(15);
 
       if (abrindo) {
         // Seta --detalhes-height antes de .aberto para a animação partir certo
@@ -4247,8 +4330,14 @@ function abrirModalManual(abaId, aoFechar) {
   if (abaId === 'btn-config') {
     const btnSairSala = _modalManualEl.querySelector('#botao-sair-sala');
     if (btnSairSala) {
-      btnSairSala.addEventListener('click', () => {
+      btnSairSala.addEventListener('click', async () => {
         fechar();
+
+        try {
+          await fetch('/api/logout', { method: 'POST' });
+        } catch (e) {
+          console.error('[logout]', e);
+        }
 
         /* Se for admin de sala específica (sala_id ≠ 0), encerra a sessão também */
         if (sessao) {
@@ -4475,6 +4564,7 @@ function _abrirModalHorario(diaNum, posicao, aulaExistente) {
       posicao,
       area: DISCIPLINAS_DRIVE[idxArea],
       professor: autor,
+      sala_id: window._salaAtual?.id,
     };
 
     envioHorarioEmAndamento = true;
@@ -4963,8 +5053,7 @@ function alternarVisibilidadeSenha() {
    Event listeners — login
    ══════════════════════════════════════════════════════════ */
 document.getElementById('form-login-admin').addEventListener('submit', (e) => {
-  // Não previne o submit — ele vai para o iframe (login-sink), invisível ao usuário,
-  // e o browser detecta o fluxo e oferece salvar a senha.
+  e.preventDefault();
   executarLoginRepre();
 });
 
@@ -5174,7 +5263,7 @@ function criarCardAtividadeProxima(item) {
   card.querySelector('.card-titulo').addEventListener('click', () => {
     const d = card.querySelector('.card-detalhes');
     const abrindo = !card.classList.contains('aberto');
-    const maxH = window.innerHeight * 0.15;
+    const maxH = _vhFixoEmPx(15);
 
     if (abrindo) {
       const h = Math.min(d.scrollHeight, maxH);
@@ -5228,7 +5317,7 @@ function renderizarListaAtividadesProximas() {
 function atualizarAlturasCardsProximos() {
   const lista = document.getElementById('lista-atividades-proximas');
   if (!lista) return;
-  const maxH = window.innerHeight * 0.15;
+  const maxH = _vhFixoEmPx(15);
   lista.querySelectorAll('.card-atividade').forEach(card => {
     const d = card.querySelector('.card-detalhes');
     if (d) card.style.setProperty('--detalhes-height', `${Math.min(d.scrollHeight, maxH)}px`);
@@ -5597,7 +5686,7 @@ function criarCardAtividadeDia(item) {
   card.querySelector('.card-titulo').addEventListener('click', () => {
     const d = card.querySelector('.card-detalhes');
     const abrindo = !card.classList.contains('aberto');
-    const maxH = window.innerHeight * 0.15;
+    const maxH = _vhFixoEmPx(15);
 
     if (abrindo) {
       const h = Math.min(d.scrollHeight, maxH);
@@ -5632,7 +5721,7 @@ function criarCardAtividadeDia(item) {
 }
 
 function atualizarAlturasCardsAtividade() {
-  const maxH = window.innerHeight * 0.15;
+  const maxH = _vhFixoEmPx(15);
   document.querySelectorAll('.card-atividade').forEach(card => {
     const d = card.querySelector('.card-detalhes');
     if (d) card.style.setProperty('--detalhes-height', `${Math.min(d.scrollHeight, maxH)}px`);
