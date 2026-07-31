@@ -105,7 +105,6 @@ function criarCookieSessao(token) {
     'HttpOnly',
     'Path=/',
     'SameSite=Strict',
-    'Max-Age=28800',
   ].join('; ') + seguro;
 }
 
@@ -178,6 +177,11 @@ const ROTAS_RESTRITAS = ['/assets/js/index.js'];
 
 // Serve arquivos estáticos (HTML/CSS/JS) da pasta
 function servirArquivoEstatico(req, res) {
+  const caminhoOriginal = req.url.split('?')[0];
+  const requisicaoDeNavegacao =
+    req.headers['sec-fetch-mode'] === 'navigate' ||
+    (caminhoOriginal === '/' && !req.headers['sec-fetch-mode']);
+
   let urlPath = req.url === '/' ? '/index.html' : req.url;
   urlPath = urlPath.split('?')[0];
 
@@ -197,6 +201,10 @@ function servirArquivoEstatico(req, res) {
     const headers = {
   'Content-Type': obterMimeTypePorExtensao(ext)
 };
+
+if (urlPath === '/index.html' && requisicaoDeNavegacao) {
+  headers['Set-Cookie'] = criarCookieLogout();
+}
 
 if (urlPath === '/sw.js') {
   headers['Cache-Control'] = 'no-store, no-cache, must-revalidate';

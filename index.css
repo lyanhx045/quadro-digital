@@ -5385,13 +5385,25 @@ li.erro-envio #entrada-link + .preview-link {
   animation: modal-manual-sair 0.25s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
-#modal-manual-overlay {
+#modal-manual-overlay,
+.modal-confirmacao-overlay {
   transition: opacity 0.3s ease;
 }
 
-#modal-manual-overlay.saindo {
+#modal-manual-overlay.saindo,
+.modal-confirmacao-overlay.saindo {
   opacity: 0;
   pointer-events: none;
+}
+
+.modal-confirmacao-overlay.aberto > .modal-confirmacao-apagar,
+.modal-confirmacao-overlay.aberto > .modal-confirmacao-acessar {
+  animation: modal-manual-entrar 0.35s cubic-bezier(0.34, 1.45, 0.64, 1) both;
+}
+
+.modal-confirmacao-overlay.aberto > .modal-confirmacao-apagar.saindo,
+.modal-confirmacao-overlay.aberto > .modal-confirmacao-acessar.saindo {
+  animation: modal-manual-sair 0.25s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
 /* ── Estrutura interna ── */

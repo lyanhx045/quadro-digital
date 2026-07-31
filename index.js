@@ -9,6 +9,27 @@
    ║                                                              ║
    ╚══════════════════════════════════════════════════════════════╝ */
 
+const _logoutInicialConcluido = fetch('/api/logout', {
+  method: 'POST',
+  cache: 'no-store',
+  credentials: 'same-origin',
+}).catch(erro => {
+  console.error('[logout-inicial]', erro);
+});
+
+window.addEventListener('pagehide', () => {
+  if (navigator.sendBeacon) {
+    navigator.sendBeacon('/api/logout');
+    return;
+  }
+
+  fetch('/api/logout', {
+    method: 'POST',
+    credentials: 'same-origin',
+    keepalive: true,
+  }).catch(() => {});
+});
+
 /* ══════════════════════════════════════════════════════════
    Ícone de carregamento — usa --cor-principal-* do tema
    ══════════════════════════════════════════════════════════ */
@@ -126,6 +147,8 @@ async function executarLoginRepre() {
   botaoEntrar.disabled = true;
 
   try {
+    await _logoutInicialConcluido;
+
     const r = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -769,13 +792,58 @@ function _abrirFormularioEdicaoCalendario(card) {
 }
 
 // ── MODO APAGAR — overlay de confirmação criado sob demanda ──
+const _timersFechamentoConfirmacao = new WeakMap();
+
+function _abrirModalConfirmacao(overlay) {
+  if (!overlay) return;
+
+  const timerPendente = _timersFechamentoConfirmacao.get(overlay);
+  if (timerPendente) {
+    clearTimeout(timerPendente);
+    _timersFechamentoConfirmacao.delete(overlay);
+  }
+
+  const card = overlay.querySelector(
+    '.modal-confirmacao-apagar, .modal-confirmacao-acessar'
+  );
+
+  overlay.classList.remove('saindo');
+  if (card) card.classList.remove('saindo');
+  overlay.classList.add('aberto');
+}
+
+function _fecharModalConfirmacao(overlay) {
+  if (
+    !overlay ||
+    !overlay.classList.contains('aberto') ||
+    overlay.classList.contains('saindo')
+  ) {
+    return;
+  }
+
+  const card = overlay.querySelector(
+    '.modal-confirmacao-apagar, .modal-confirmacao-acessar'
+  );
+
+  overlay.classList.add('saindo');
+  if (card) card.classList.add('saindo');
+
+  const timer = setTimeout(() => {
+    overlay.classList.remove('aberto', 'saindo');
+    if (card) card.classList.remove('saindo');
+    _timersFechamentoConfirmacao.delete(overlay);
+  }, 260);
+
+  _timersFechamentoConfirmacao.set(overlay, timer);
+}
+
 let _overlayApagar = null;
 
 function _garantirOverlayApagar() {
   if (_overlayApagar) return;
 
   _overlayApagar = document.createElement('div');
-  _overlayApagar.className = 'modal-overlay';
+  _overlayApagar.className = 'modal-overlay modal-confirmacao-overlay';
 
   // Card de confirmação — reutiliza .anexo-com-erro do CSS existente
   const card = document.createElement('div');
@@ -817,7 +885,7 @@ function _garantirOverlayApagar() {
   _overlayApagar.appendChild(card);
   document.body.appendChild(_overlayApagar);
 
-  const fechar = () => _overlayApagar.classList.remove('aberto');
+  const fechar = () => _fecharModalConfirmacao(_overlayApagar);
   btnCancelar.addEventListener('click', fechar);
   _overlayApagar.addEventListener('click', e => { if (e.target === _overlayApagar) fechar(); });
   document.addEventListener('keydown', e => {
@@ -868,7 +936,7 @@ function _exibirConfirmacaoApagar(card) {
 
       novoBtn.disabled = false;
       novoBtn.textContent = 'apagar';
-      _overlayApagar.classList.remove('aberto');
+      _fecharModalConfirmacao(_overlayApagar);
       overlayCarregandoApagar.remove();
 
       // Remove o card da UI com animação suave
@@ -900,7 +968,7 @@ function _exibirConfirmacaoApagar(card) {
     }
   });
 
-  _overlayApagar.classList.add('aberto');
+  _abrirModalConfirmacao(_overlayApagar);
 }
 
 /* ── Referência global e variáveis de estado ─────────────
@@ -4665,7 +4733,7 @@ function _garantirOverlayApagarDrive() {
   if (_overlayApagarDrive) return;
 
   _overlayApagarDrive = document.createElement('div');
-  _overlayApagarDrive.className = 'modal-overlay';
+  _overlayApagarDrive.className = 'modal-overlay modal-confirmacao-overlay';
 
   const card = document.createElement('div');
   card.className = 'anexo-com-erro modal-confirmacao-apagar';
@@ -4695,7 +4763,7 @@ function _garantirOverlayApagarDrive() {
   _overlayApagarDrive.appendChild(card);
   document.body.appendChild(_overlayApagarDrive);
 
-  const fechar = () => _overlayApagarDrive.classList.remove('aberto');
+  const fechar = () => _fecharModalConfirmacao(_overlayApagarDrive);
   btnCancelar.addEventListener('click', fechar);
   _overlayApagarDrive.addEventListener('click', e => { if (e.target === _overlayApagarDrive) fechar(); });
   document.addEventListener('keydown', e => {
@@ -4729,7 +4797,7 @@ function _exibirConfirmacaoApagarDrive(driveId, nomeLabel, cardEl) {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'Erro ao apagar');
 
-      _overlayApagarDrive.classList.remove('aberto');
+      _fecharModalConfirmacao(_overlayApagarDrive);
       overlayCarregandoApagar.remove();
 
       cardEl.style.transition = 'opacity 0.3s, transform 0.3s';
@@ -4753,7 +4821,7 @@ function _exibirConfirmacaoApagarDrive(driveId, nomeLabel, cardEl) {
       }, 5000);
     }
   });
-  _overlayApagarDrive.classList.add('aberto');
+  _abrirModalConfirmacao(_overlayApagarDrive);
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -4765,7 +4833,7 @@ function _garantirOverlayAcessarDrive() {
   if (_overlayAcessarDrive) return;
 
   _overlayAcessarDrive = document.createElement('div');
-  _overlayAcessarDrive.className = 'modal-overlay';
+  _overlayAcessarDrive.className = 'modal-overlay modal-confirmacao-overlay';
 
   const card = document.createElement('div');
   card.className = 'acessar-com-confirmacao modal-confirmacao-acessar';
@@ -4795,7 +4863,7 @@ function _garantirOverlayAcessarDrive() {
   _overlayAcessarDrive.appendChild(card);
   document.body.appendChild(_overlayAcessarDrive);
 
-  const fechar = () => _overlayAcessarDrive.classList.remove('aberto');
+  const fechar = () => _fecharModalConfirmacao(_overlayAcessarDrive);
   btnCancelar.addEventListener('click', fechar);
   _overlayAcessarDrive.addEventListener('click', e => { if (e.target === _overlayAcessarDrive) fechar(); });
   document.addEventListener('keydown', e => {
@@ -4812,7 +4880,7 @@ function _garantirOverlayAcessarPlataforma() {
   if (_overlayAcessarPlataforma) return;
 
   _overlayAcessarPlataforma = document.createElement('div');
-  _overlayAcessarPlataforma.className = 'modal-overlay';
+  _overlayAcessarPlataforma.className = 'modal-overlay modal-confirmacao-overlay';
 
   const card = document.createElement('div');
   card.className = 'acessar-com-confirmacao modal-confirmacao-acessar';
@@ -4842,7 +4910,7 @@ function _garantirOverlayAcessarPlataforma() {
   _overlayAcessarPlataforma.appendChild(card);
   document.body.appendChild(_overlayAcessarPlataforma);
 
-  const fechar = () => _overlayAcessarPlataforma.classList.remove('aberto');
+  const fechar = () => _fecharModalConfirmacao(_overlayAcessarPlataforma);
   btnCancelar.addEventListener('click', fechar);
   _overlayAcessarPlataforma.addEventListener('click', e => { if (e.target === _overlayAcessarPlataforma) fechar(); });
   document.addEventListener('keydown', e => {
@@ -4861,10 +4929,10 @@ function _exibirConfirmacaoAcessarPlataforma(link, nomeLabel) {
   novoBtn.textContent = 'acessar';
   btnConf.parentNode.replaceChild(novoBtn, btnConf);
   novoBtn.addEventListener('click', () => {
-    _overlayAcessarPlataforma.classList.remove('aberto');
+    _fecharModalConfirmacao(_overlayAcessarPlataforma);
     window.open(link, '_blank', 'noopener');
   });
-  _overlayAcessarPlataforma.classList.add('aberto');
+  _abrirModalConfirmacao(_overlayAcessarPlataforma);
 }
 
 function _exibirConfirmacaoAcessarDrive(link, nomeLabel, area) {
@@ -4900,10 +4968,10 @@ function _exibirConfirmacaoAcessarDrive(link, nomeLabel, area) {
   novoBtn.textContent = 'acessar';
   btnConf.parentNode.replaceChild(novoBtn, btnConf);
   novoBtn.addEventListener('click', () => {
-    _overlayAcessarDrive.classList.remove('aberto');
+    _fecharModalConfirmacao(_overlayAcessarDrive);
     window.open(link, '_blank', 'noopener');
   });
-  _overlayAcessarDrive.classList.add('aberto');
+  _abrirModalConfirmacao(_overlayAcessarDrive);
 }
 
 /* ══════════════════════════════════════════════════════════
