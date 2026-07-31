@@ -3440,7 +3440,7 @@ li.erro-envio #entrada-link + .preview-link {
   gap: 1vh;
   background: rgb(var(--cor-branco-claro));
   border: 2px solid rgb(var(--cor-cinza-borda));
-  border-radius: 18.5px;
+  border-radius: 30px;
   box-shadow:
     0 5px 15px rgba(var(--cor-area-drive, var(--cor-principal-escuro)), 0.3),
     10px 10px 20px rgba(var(--cor-sombra-apagada), 0.15);
@@ -5540,7 +5540,7 @@ li.erro-envio #entrada-link + .preview-link {
 .manual-texto-simples {
   width: 100%;
   padding: 1.25vh 1.5vh;
-  border-radius: 18.5px;
+  border-radius: 20px;
   background: rgba(var(--cor-letra-apagada), 0.075);
   box-shadow:
     inset -3px -3px 6px rgba(var(--cor-inset-claro), 0.075),
@@ -5687,9 +5687,31 @@ li.erro-envio #entrada-link + .preview-link {
   text-shadow: var(--text-shadow-letra) !important;
 }
 
+.modal-confirmacao-cancelar:hover {
+  background: rgba(var(--cor-erro), 0.025) !important;
+  box-shadow:
+    inset -1px -1px 2px rgba(var(--cor-inset-claro), 0.075),
+    inset  -2px  -2px 6px rgba(var(--cor-erro-claro), 0.15),
+    inset  2px  2px 6px rgba(var(--cor-erro-escuro), 0.15),
+    inset  1.5px  1.5px 3px rgba(var(--cor-inset-escuro), 0.025) !important;
+  color: rgb(var(--cor-erro-escuro)) !important;
+  text-shadow: 0 0 8px rgb(var(--cor-erro-escuro)) !important;
+  opacity: 0.8;
+}
+
 .modal-confirmacao-confirmar {
   flex: 1;
   font-size: 120%;
+}
+
+.modal-confirmacao-confirmar:hover {
+  transform: scale(1.03);
+  font-size: 122.5%;
+}
+
+.modal-confirmacao-cancelar,
+.modal-confirmacao-confirmar {
+  border-radius: 20px !important;
 }
 
 /* ── Visualizador de PDF ── */

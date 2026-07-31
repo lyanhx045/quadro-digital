@@ -798,6 +798,12 @@ function _exibirConfirmacaoApagar(card) {
     novoBtn.disabled = true;
     novoBtn.textContent = '...';
 
+    const overlayCarregandoApagar = document.createElement('div');
+    overlayCarregandoApagar.id = 'overlay-carregando-apagar-atividade';
+    overlayCarregandoApagar.className = 'modal-overlay aberto';
+    overlayCarregandoApagar.innerHTML = _criarIconeCarregandoHTML();
+    document.body.appendChild(overlayCarregandoApagar);
+
     try {
       const r = await fetch(`/api/atividades/${id}`, { method: 'DELETE' });
       const j = await r.json();
@@ -809,6 +815,7 @@ function _exibirConfirmacaoApagar(card) {
       novoBtn.disabled = false;
       novoBtn.textContent = 'apagar';
       _overlayApagar.classList.remove('aberto');
+      overlayCarregandoApagar.remove();
 
       // Remove o card da UI com animação suave
       card.style.transition = 'opacity 0.3s, transform 0.3s';
@@ -827,10 +834,15 @@ function _exibirConfirmacaoApagar(card) {
 
     } catch (err) {
       console.error('[editor-cal] erro ao apagar:', err);
-      novoBtn.disabled  = false;
-      novoBtn.textContent = 'apagar';
-      const subtit = document.getElementById('_apagar-subtitulo');
-      if (subtit) subtit.textContent = 'erro ao apagar — tente novamente';
+
+      setTimeout(() => {
+        overlayCarregandoApagar.remove();
+        novoBtn.disabled = false;
+        novoBtn.textContent = 'apagar';
+
+        const subtit = document.getElementById('_apagar-subtitulo');
+        if (subtit) subtit.textContent = 'erro ao apagar — tente novamente';
+      }, 5000);
     }
   });
 
@@ -3080,6 +3092,17 @@ function _inicializarLogicaFormulario(itemEdicao) {
       overlayEnvio = null;
     };
 
+    const voltarCalendarioDepoisDoErro = erro => {
+      console.error('Erro ao enviar atividade:', erro);
+
+      setTimeout(() => {
+        esconderCarregamentoEnvio();
+
+        const btnCal = document.getElementById('btn-calendario');
+        if (btnCal) btnCal.click();
+      }, 5000);
+    };
+
     const nomesProfessores = window._listaProfessores && window._listaProfessores.length
       ? window._listaProfessores
       : ['André Ferro','Edney','Bruno','Vinicius','Domiciano','Rayan','Bruna','Gracielle','Vitor','Monara','André Almeida','Gustavo','Ricardo','Fontenelle','Maryana','Tobias'];
@@ -3228,14 +3251,14 @@ function _inicializarLogicaFormulario(itemEdicao) {
               abrirPainelDia(diaNum, mesNum, dataVoltaStr);
             };
 
+            esconderCarregamentoEnvio();
+
             const btnCal = document.getElementById('btn-calendario');
             if (btnCal) btnCal.click();
           })
           .catch(erro => {
-            console.error('Erro ao salvar atividade:', erro);
-            alert('Erro ao salvar: ' + erro.message);
-          })
-          .finally(esconderCarregamentoEnvio);
+            voltarCalendarioDepoisDoErro(erro);
+          });
 
         return;
       }
@@ -3259,7 +3282,9 @@ function _inicializarLogicaFormulario(itemEdicao) {
           }
 
           return resposta;
-        });      });
+        });
+      });
+
       Promise.all(envios).then(async () => {
         const dia  = parseInt(fixos['dia'],  10);
         const mes  = parseInt(fixos['mes'],  10) - 1; // 0-based
@@ -3275,15 +3300,15 @@ function _inicializarLogicaFormulario(itemEdicao) {
           abrirPainelDia(dia, mes, dataVoltaStr);
         };
 
+        esconderCarregamentoEnvio();
+
         // Navega para o calendário (dispara renderAbaAtiva → carregarDadosAtividades)
         const btnCal = document.getElementById('btn-calendario');
         if (btnCal) btnCal.click();
       })
         .catch(erro => {
-          console.error('Erro ao postar atividade:', erro);
-          alert('Erro ao postar: ' + erro.message);
-        })
-        .finally(esconderCarregamentoEnvio);
+          voltarCalendarioDepoisDoErro(erro);
+        });
     });
 
     const limparErro = e => {
@@ -3660,8 +3685,12 @@ function _abrirModalDrive(itemEdicao, semLink = false) {
 
   // ── Envio ─────────────────────────────────────────────
   const form = document.getElementById('form-drive');
+  let envioDriveEmAndamento = false;
+
   if (form) form.addEventListener('submit', async function(e) {
     e.preventDefault();
+    if (envioDriveEmAndamento) return;
+
     const seletor = document.getElementById('seletor-disciplina');
     const autor   = (document.getElementById('entrada-autor')?.value || '').trim();
     const linkEl  = document.getElementById('entrada-link');
@@ -3688,8 +3717,16 @@ function _abrirModalDrive(itemEdicao, semLink = false) {
       ...(window._salaAtual?.id ? { sala_id: window._salaAtual.id } : {}),
     };
 
+    envioDriveEmAndamento = true;
+
     const botao = document.getElementById('botao-salvar-drive');
     if (botao) botao.disabled = true;
+
+    const overlayEnvioDrive = document.createElement('div');
+    overlayEnvioDrive.id = 'overlay-envio-drive';
+    overlayEnvioDrive.className = 'modal-overlay aberto';
+    overlayEnvioDrive.innerHTML = _criarIconeCarregandoHTML();
+    document.body.appendChild(overlayEnvioDrive);
 
     try {
       let res, json;
@@ -3704,12 +3741,29 @@ function _abrirModalDrive(itemEdicao, semLink = false) {
       }
       if (!res.ok) throw new Error(json.error || 'Erro ao salvar');
       fechar();
+
       // Recarrega drives na UI
       await carregarDrives();
       _iniciarCardDrive();
+
+      overlayEnvioDrive.remove();
+      envioDriveEmAndamento = false;
     } catch (err) {
       console.error('[modal-drive] erro:', err);
-      if (botao) { botao.disabled = false; botao.textContent = 'erro — tente novamente'; setTimeout(() => { botao.textContent = 'Salvar'; }, 2500); }
+
+      setTimeout(() => {
+        overlayEnvioDrive.remove();
+        envioDriveEmAndamento = false;
+
+        if (botao) {
+          botao.disabled = false;
+          botao.textContent = 'erro — tente novamente';
+
+          setTimeout(() => {
+            botao.textContent = 'Salvar';
+          }, 2500);
+        }
+      }, 5000);
     }
   });
 }
@@ -4402,8 +4456,12 @@ function _abrirModalHorario(diaNum, posicao, aulaExistente) {
     if (li) li.classList.remove('erro-envio');
   });
 
+  let envioHorarioEmAndamento = false;
+
   novoForm.addEventListener('submit', async function(e) {
     e.preventDefault();
+    if (envioHorarioEmAndamento) return;
+
     const seletor = document.getElementById('seletor-disciplina');
     const autor   = (document.getElementById('entrada-autor')?.value || '').trim();
     const norm = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
@@ -4419,8 +4477,16 @@ function _abrirModalHorario(diaNum, posicao, aulaExistente) {
       professor: autor,
     };
 
+    envioHorarioEmAndamento = true;
+
     const botao = document.getElementById('botao-salvar-drive');
     if (botao) botao.disabled = true;
+
+    const overlayEnvioHorario = document.createElement('div');
+    overlayEnvioHorario.id = 'overlay-envio-horario';
+    overlayEnvioHorario.className = 'modal-overlay aberto';
+    overlayEnvioHorario.innerHTML = _criarIconeCarregandoHTML();
+    document.body.appendChild(overlayEnvioHorario);
 
     try {
       const res  = await fetch('/api/grade-aulas', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
@@ -4477,9 +4543,25 @@ function _abrirModalHorario(diaNum, posicao, aulaExistente) {
         // Rebind cliques de edição nas colunas
         if (sessao) _bindHorarioEditorCliques();
       }
+
+      overlayEnvioHorario.remove();
+      envioHorarioEmAndamento = false;
     } catch (err) {
       console.error('[modal-horario] erro:', err);
-      if (botao) { botao.disabled = false; botao.textContent = 'erro — tente novamente'; setTimeout(() => { botao.textContent = 'Salvar'; }, 2500); }
+
+      setTimeout(() => {
+        overlayEnvioHorario.remove();
+        envioHorarioEmAndamento = false;
+
+        if (botao) {
+          botao.disabled = false;
+          botao.textContent = 'erro — tente novamente';
+
+          setTimeout(() => {
+            botao.textContent = 'Salvar';
+          }, 2500);
+        }
+      }, 5000);
     }
   });
 }
@@ -4543,23 +4625,42 @@ function _exibirConfirmacaoApagarDrive(driveId, nomeLabel, cardEl) {
   novoBtn.textContent = 'apagar';
   btnConf.parentNode.replaceChild(novoBtn, btnConf);
   novoBtn.addEventListener('click', async () => {
-    novoBtn.disabled = true; novoBtn.textContent = '...';
+    novoBtn.disabled = true;
+    novoBtn.textContent = '...';
+
+    const overlayCarregandoApagar = document.createElement('div');
+    overlayCarregandoApagar.id = 'overlay-carregando-apagar-drive';
+    overlayCarregandoApagar.className = 'modal-overlay aberto';
+    overlayCarregandoApagar.innerHTML = _criarIconeCarregandoHTML();
+    document.body.appendChild(overlayCarregandoApagar);
+
     try {
       const r = await fetch(`/api/drives/${driveId}`, { method: 'DELETE' });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'Erro ao apagar');
+
       _overlayApagarDrive.classList.remove('aberto');
+      overlayCarregandoApagar.remove();
+
       cardEl.style.transition = 'opacity 0.3s, transform 0.3s';
-      cardEl.style.opacity = '0'; cardEl.style.transform = 'scale(0.92)';
+      cardEl.style.opacity = '0';
+      cardEl.style.transform = 'scale(0.92)';
+
       setTimeout(() => {
         cardEl.remove();
         _drives = _drives.filter(d => String(d.id) !== String(driveId));
       }, 320);
     } catch (err) {
       console.error('[apagar-drive]', err);
-      novoBtn.disabled = false; novoBtn.textContent = 'apagar';
-      const s = document.getElementById('_apagar-drive-subtitulo');
-      if (s) s.textContent = 'erro ao apagar — tente novamente';
+
+      setTimeout(() => {
+        overlayCarregandoApagar.remove();
+        novoBtn.disabled = false;
+        novoBtn.textContent = 'apagar';
+
+        const s = document.getElementById('_apagar-drive-subtitulo');
+        if (s) s.textContent = 'erro ao apagar — tente novamente';
+      }, 5000);
     }
   });
   _overlayApagarDrive.classList.add('aberto');
