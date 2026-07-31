@@ -1474,7 +1474,7 @@ function montarPainelConfig() {
 
   // ── HTML dos dois blocos ──
   conteudoTipo.innerHTML = `
-    <div class="container-largura-total">
+    <div class="container-configurar">
 
       <!-- Aparência -->
       <div class="tema-container-aparencia">
@@ -3053,6 +3053,33 @@ function _inicializarLogicaFormulario(itemEdicao) {
   (function inicializarEnvio() {
     const formulario = document.getElementById('formu');
     if (!formulario) return;
+
+    const botaoPostar = document.getElementById('botao-postar');
+    let envioEmAndamento = false;
+    let overlayEnvio = null;
+
+    const mostrarCarregamentoEnvio = () => {
+      if (envioEmAndamento) return false;
+
+      envioEmAndamento = true;
+      if (botaoPostar) botaoPostar.disabled = true;
+
+      overlayEnvio = document.createElement('div');
+      overlayEnvio.id = 'overlay-envio-atividade';
+      overlayEnvio.className = 'modal-overlay aberto';
+      overlayEnvio.innerHTML = _criarIconeCarregandoHTML();
+      document.body.appendChild(overlayEnvio);
+
+      return true;
+    };
+
+    const esconderCarregamentoEnvio = () => {
+      envioEmAndamento = false;
+      if (botaoPostar) botaoPostar.disabled = false;
+      if (overlayEnvio) overlayEnvio.remove();
+      overlayEnvio = null;
+    };
+
     const nomesProfessores = window._listaProfessores && window._listaProfessores.length
       ? window._listaProfessores
       : ['André Ferro','Edney','Bruno','Vinicius','Domiciano','Rayan','Bruna','Gracielle','Vitor','Monara','André Almeida','Gustavo','Ricardo','Fontenelle','Maryana','Tobias'];
@@ -3089,6 +3116,8 @@ function _inicializarLogicaFormulario(itemEdicao) {
 
     formulario.addEventListener('submit', function(e) {
       e.preventDefault();
+      if (envioEmAndamento) return;
+
       let ok = true;
       const profLi = document.querySelector('.campo-prof');
       const profVal = document.getElementById('entrada-professor');
@@ -3116,6 +3145,7 @@ function _inicializarLogicaFormulario(itemEdicao) {
       });
       atualizarGuia();
       if (!ok) return;
+      if (!mostrarCarregamentoEnvio()) return;
 
       const fixos = {
         deslizador: document.getElementById('deslizador')?.value ?? '',
@@ -3132,7 +3162,11 @@ function _inicializarLogicaFormulario(itemEdicao) {
       if (modoEdicao) {
         const itemIdEd = formulario.dataset.itemIdEdicao;
         const primeiraSecao = document.querySelectorAll('.bloco-descricao')[0];
-        if (!primeiraSecao) return;
+
+        if (!primeiraSecao) {
+          esconderCarregamentoEnvio();
+          return;
+        }
 
         const MATERIAS_UPD = ['MATEMÁTICA','ITINERÁRIO','LINGUAGENS','HUMANAS','NATUREZA'];
         const dadosAtualizados = {
@@ -3148,38 +3182,61 @@ function _inicializarLogicaFormulario(itemEdicao) {
           descricao_detalhes: primeiraSecao.querySelector('#entrada-detalhes')?.value ?? '',
         };
 
-        fetch(`/api/atividades/${itemIdEd}`, {
+        const todosArqs = state.arquivos[0] || [];
+        const pathsExistentes = todosArqs.filter(a => a._existente).map(a => a._path);
+        const arquivosNovos   = todosArqs.filter(a => !a._existente);
+        const fdAnexos = new FormData();
+
+        fdAnexos.append('_anexos_existentes', JSON.stringify(pathsExistentes));
+        arquivosNovos.forEach(f => fdAnexos.append('arquivo', f, f.name));
+
+        const promessaAtualizacao = fetch(`/api/atividades/${itemIdEd}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(dadosAtualizados)
-        })
-          .then(r => r.json())
-          .then(j => {
-            if (j.error) { alert('Erro ao salvar: ' + j.error); return; }
+        }).then(async r => {
+          const j = await r.json();
+
+          if (!r.ok || j.error) {
+            throw new Error(j.error || 'Erro ao salvar a atividade.');
+          }
+        });
+
+        const promessaAnexos = fetch(`/api/atividades/${itemIdEd}/anexos`, {
+          method: 'POST',
+          body: fdAnexos
+        }).then(async r => {
+          const j = await r.json();
+
+          if (!r.ok || j.error) {
+            throw new Error(j.error || 'Erro ao salvar os anexos.');
+          }
+        });
+
+        Promise.all([promessaAtualizacao, promessaAnexos])
+          .then(() => {
             const partesDt = dadosAtualizados.data.split('-');
             const dataVoltaStr = `${String(partesDt[2]).padStart(2,'0')}/${String(partesDt[1]).padStart(2,'0')}/${partesDt[0]}`;
             const diaNum = parseInt(partesDt[2], 10);
             const mesNum = parseInt(partesDt[1], 10) - 1;
             const _orig = carregarDadosAtividades;
+
             carregarDadosAtividades = async function() {
               await _orig();
               carregarDadosAtividades = _orig;
               renderizarCalendarioComEventos();
               abrirPainelDia(diaNum, mesNum, dataVoltaStr);
             };
+
             const btnCal = document.getElementById('btn-calendario');
             if (btnCal) btnCal.click();
-          });
+          })
+          .catch(erro => {
+            console.error('Erro ao salvar atividade:', erro);
+            alert('Erro ao salvar: ' + erro.message);
+          })
+          .finally(esconderCarregamentoEnvio);
 
-        // Anexos: envia separado (existentes a preservar + novos arquivos)
-        // Sempre envia em modo edição para garantir que remoções de anexos sejam persistidas
-        const todosArqs = state.arquivos[0] || [];
-        const pathsExistentes = todosArqs.filter(a => a._existente).map(a => a._path);
-        const arquivosNovos   = todosArqs.filter(a => !a._existente);
-        const fdAnexos = new FormData();
-        fdAnexos.append('_anexos_existentes', JSON.stringify(pathsExistentes));
-        arquivosNovos.forEach(f => fdAnexos.append('arquivo', f, f.name));
-        fetch(`/api/atividades/${itemIdEd}/anexos`, { method: 'POST', body: fdAnexos }).catch(console.error);
         return;
       }
 
@@ -3195,8 +3252,14 @@ function _inicializarLogicaFormulario(itemEdicao) {
         // Inclui sala_id se o usuário estiver em uma sala
         const salaId = window._salaAtual ? window._salaAtual.id : null;
         if (salaId) fd.append('sala_id', String(salaId));
-        return fetch('/', { method: 'POST', body: fd });
-      });
+        return fetch('/', { method: 'POST', body: fd }).then(async resposta => {
+          if (!resposta.ok) {
+            const mensagem = await resposta.text();
+            throw new Error(mensagem || 'Erro ao postar atividade.');
+          }
+
+          return resposta;
+        });      });
       Promise.all(envios).then(async () => {
         const dia  = parseInt(fixos['dia'],  10);
         const mes  = parseInt(fixos['mes'],  10) - 1; // 0-based
@@ -3215,7 +3278,12 @@ function _inicializarLogicaFormulario(itemEdicao) {
         // Navega para o calendário (dispara renderAbaAtiva → carregarDadosAtividades)
         const btnCal = document.getElementById('btn-calendario');
         if (btnCal) btnCal.click();
-      });
+      })
+        .catch(erro => {
+          console.error('Erro ao postar atividade:', erro);
+          alert('Erro ao postar: ' + erro.message);
+        })
+        .finally(esconderCarregamentoEnvio);
     });
 
     const limparErro = e => {
@@ -4072,8 +4140,8 @@ function _vincularPreviaManual(overlay) {
   }
 }
 
-function abrirModalManual(abaId) {
-  if (_modalManualEl) {
+function abrirModalManual(abaId, aoFechar) {
+    if (_modalManualEl) {
     _modalManualEl.remove();
     _modalManualEl = null;
   }
@@ -4173,6 +4241,10 @@ function abrirModalManual(abaId) {
     setTimeout(() => {
       if (overlay.parentNode) overlay.remove();
       if (_modalManualEl === overlay) _modalManualEl = null;
+
+      if (typeof aoFechar === 'function') {
+        aoFechar();
+      }
     }, 260);
   };
 
@@ -4795,8 +4867,25 @@ document.getElementById('form-login-admin').addEventListener('submit', (e) => {
   executarLoginRepre();
 });
 
-document.getElementById('botao-ajuda-login').addEventListener('click', () => abrirModalManual('login'));
-document.getElementById('botao-ajuda-login-admin').addEventListener('click', () => abrirModalManual('login'));
+document.getElementById('botao-ajuda-login').addEventListener('click', () => {
+  const modalSala = document.getElementById('modal-login-sala');
+
+  modalSala.classList.remove('aberto');
+
+  setTimeout(() => {
+    abrirModalManual('login', () => {
+      modalSala.classList.add('aberto');
+    });
+  }, 300);
+});
+
+document.getElementById('botao-ajuda-login-admin').addEventListener('click', () => {
+  fecharModalLogin(false);
+
+  setTimeout(() => {
+    abrirModalManual('login');
+  }, 300);
+});
 
 ['campo-usuario-login', 'campo-senha-login'].forEach(id => {
   const el = document.getElementById(id);
