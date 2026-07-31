@@ -3519,7 +3519,7 @@ li.erro-envio #entrada-link + .preview-link {
 #painel-editor-calendario.aberto {
   outline: 2px solid rgba(var(--cor-cinza-borda), 1);
   top: calc(calc(5 * var(--valor-vh)) - calc(0.5 * var(--valor-vh)));
-  right: calc(50% - 175px - calc(0.5 * var(--valor-vh)));
+  right: calc(50% - (175px * var(--escala-altura-interface)) - calc(0.5 * var(--valor-vh)));
   gap: calc(0.5 * var(--valor-vh));
   opacity: 1;
   pointer-events: all;
@@ -3645,7 +3645,7 @@ li.erro-envio #entrada-link + .preview-link {
 #painel-editor-drive.aberto {
   outline: 2px solid rgba(var(--cor-cinza-borda), 1);
   top: calc(calc(5 * var(--valor-vh)) - calc(0.5 * var(--valor-vh)));
-  right: calc(50% - 175px - calc(0.5 * var(--valor-vh)));
+  right: calc(50% - (175px * var(--escala-altura-interface)) - calc(0.5 * var(--valor-vh)));
   gap: calc(0.5 * var(--valor-vh));
   opacity: 1;
   pointer-events: all;
