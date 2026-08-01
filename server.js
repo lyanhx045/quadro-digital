@@ -172,6 +172,102 @@ function obterMimeTypePorExtensao(ext) {
   return types[ext] || 'application/octet-stream';
 }
 
+// Descobre o endereço público usado nos metadados, robots.txt e sitemap.
+// Na hospedagem, SITE_URL pode ser definido como https://seu-dominio.com.br.
+function obterUrlPublica(req) {
+  const urlConfigurada = String(process.env.SITE_URL || '').trim();
+
+  if (urlConfigurada) {
+    try {
+      const url = new URL(urlConfigurada);
+
+      if (url.protocol === 'http:' || url.protocol === 'https:') {
+        return url.toString().replace(/\/+$/, '');
+      }
+    } catch (_) {}
+  }
+
+  const protocoloEncaminhado = String(req.headers['x-forwarded-proto'] || '')
+    .split(',')[0]
+    .trim();
+
+  const protocolo =
+    protocoloEncaminhado === 'http' || protocoloEncaminhado === 'https'
+      ? protocoloEncaminhado
+      : (req.socket.encrypted || process.env.NODE_ENV === 'production' ? 'https' : 'http');
+
+  const host = String(
+    req.headers['x-forwarded-host'] ||
+    req.headers.host ||
+    `localhost:${PORT}`
+  ).split(',')[0].trim();
+
+  if (!/^[a-z0-9.-]+(?::\d+)?$/i.test(host)) {
+    return `http://localhost:${PORT}`;
+  }
+
+  return `${protocolo}://${host}`;
+}
+
+function escaparXml(valor) {
+  return String(valor)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function servirRobotsTxt(req, res) {
+  const urlPublica = obterUrlPublica(req);
+  const conteudo = [
+    'User-agent: *',
+    'Allow: /',
+    'Disallow: /api/',
+    '',
+    `Sitemap: ${urlPublica}/sitemap.xml`,
+    '',
+  ].join('\n');
+
+  res.writeHead(200, {
+    'Content-Type': 'text/plain; charset=utf-8',
+    'Cache-Control': 'public, max-age=3600',
+    'X-Content-Type-Options': 'nosniff',
+  });
+  res.end(conteudo);
+}
+
+function servirSitemapXml(req, res) {
+  const urlPublica = obterUrlPublica(req);
+  let ultimaAlteracao = new Date().toISOString().slice(0, 10);
+
+  try {
+    ultimaAlteracao = fs
+      .statSync(path.join(RAIZ, 'index.html'))
+      .mtime
+      .toISOString()
+      .slice(0, 10);
+  } catch (_) {}
+
+  const conteudo = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    '  <url>',
+    `    <loc>${escaparXml(`${urlPublica}/`)}</loc>`,
+    `    <lastmod>${ultimaAlteracao}</lastmod>`,
+    '  </url>',
+    '</urlset>',
+    '',
+  ].join('\n');
+
+  res.writeHead(200, {
+    'Content-Type': 'application/xml; charset=utf-8',
+    'Cache-Control': 'public, max-age=3600',
+    'X-Content-Type-Options': 'nosniff',
+  });
+  res.end(conteudo);
+}
+
 // Rotas de acesso restrito (bloqueadas para acesso direto)
 const ROTAS_RESTRITAS = ['/assets/js/index.js'];
 
@@ -184,6 +280,14 @@ function servirArquivoEstatico(req, res) {
 
   let urlPath = req.url === '/' ? '/index.html' : req.url;
   urlPath = urlPath.split('?')[0];
+
+  if (urlPath === '/robots.txt') {
+    return servirRobotsTxt(req, res);
+  }
+
+  if (urlPath === '/sitemap.xml') {
+    return servirSitemapXml(req, res);
+  }
 
   if (ROTAS_RESTRITAS.includes(urlPath)) {
     res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -199,29 +303,40 @@ function servirArquivoEstatico(req, res) {
       return res.end('Arquivo não encontrado: ' + urlPath);
     }
     const headers = {
-  'Content-Type': obterMimeTypePorExtensao(ext)
-};
+      'Content-Type': obterMimeTypePorExtensao(ext)
+    };
 
-if (urlPath === '/index.html' && requisicaoDeNavegacao) {
-  headers['Set-Cookie'] = criarCookieLogout();
-}
+    let conteudoFinal = content;
 
-if (urlPath === '/sw.js') {
-  headers['Cache-Control'] = 'no-store, no-cache, must-revalidate';
-  headers['Pragma'] = 'no-cache';
-  headers['Expires'] = '0';
-}
+    if (urlPath === '/index.html') {
+      conteudoFinal = Buffer.from(
+        content
+          .toString('utf8')
+          .replaceAll('__URL_PUBLICA__', obterUrlPublica(req)),
+        'utf8'
+      );
+    }
 
-if (
-  urlPath === '/index.html' ||
-  urlPath === '/index.css' ||
-  urlPath === '/index.js'
-) {
-  headers['Cache-Control'] = 'no-cache, must-revalidate';
-}
+    if (urlPath === '/index.html' && requisicaoDeNavegacao) {
+      headers['Set-Cookie'] = criarCookieLogout();
+    }
 
-res.writeHead(200, headers);
-res.end(content);
+    if (urlPath === '/sw.js') {
+      headers['Cache-Control'] = 'no-store, no-cache, must-revalidate';
+      headers['Pragma'] = 'no-cache';
+      headers['Expires'] = '0';
+    }
+
+    if (
+      urlPath === '/index.html' ||
+      urlPath === '/index.css' ||
+      urlPath === '/index.js'
+    ) {
+      headers['Cache-Control'] = 'no-cache, must-revalidate';
+    }
+
+    res.writeHead(200, headers);
+    res.end(conteudoFinal);
   });
 }
 
