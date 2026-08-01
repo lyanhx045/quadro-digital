@@ -4010,10 +4010,12 @@ function _popularContadoresManuais(root) {
     if (!(tipo in contagem)) return;
     if (!item.data || !item.data.includes('/')) return;
 
-    // Filtra pelo local de exibição configurado (casa / sala / ambos)
-    const loc = normalizarTexto(item.local);
-    if (!_filtroExibicao.casa && loc === 'casa') return;
-    if (!_filtroExibicao.sala && loc === 'sala') return;
+    // Provas aparecem sempre; os demais tipos seguem o filtro casa/sala.
+    if (tipo !== 'prova') {
+      const loc = normalizarTexto(item.local);
+      if (!_filtroExibicao.casa && loc === 'casa') return;
+      if (!_filtroExibicao.sala && loc === 'sala') return;
+    }
 
     const [d, m, a] = item.data.split('/');
     const dataItem = new Date(Number(a), Number(m) - 1, Number(d));

@@ -1,4 +1,4 @@
-const CACHE = 'quadro-v1.1.8';
+const CACHE = 'quadro-v1.1.9';
 
 const ARQUIVOS_OFFLINE = [
   '/index.html',
