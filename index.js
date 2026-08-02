@@ -223,6 +223,329 @@ async function carregarDadosAtividades() {
 
 
 /* ══════════════════════════════════════════════════════════
+   Notificações push — inscrição por navegador e abertura direta
+   ══════════════════════════════════════════════════════════ */
+const _CHAVE_NOTIFICACOES_ATIVAS = 'notificacoesAtivadas';
+let _atividadeNotificacaoPendente = null;
+let _abrindoAtividadeNotificacao = false;
+
+function _converterChaveVapid(chaveBase64) {
+  const preenchimento = '='.repeat((4 - (chaveBase64.length % 4)) % 4);
+  const base64 = (chaveBase64 + preenchimento)
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+  const dados = atob(base64);
+  const resultado = new Uint8Array(dados.length);
+
+  for (let i = 0; i < dados.length; i += 1) {
+    resultado[i] = dados.charCodeAt(i);
+  }
+
+  return resultado;
+}
+
+function _notificacoesForamAtivadas() {
+  try {
+    return localStorage.getItem(_CHAVE_NOTIFICACOES_ATIVAS) === '1';
+  } catch (_) {
+    return false;
+  }
+}
+
+function _salvarPreferenciaNotificacoes(ativa) {
+  try {
+    if (ativa) localStorage.setItem(_CHAVE_NOTIFICACOES_ATIVAS, '1');
+    else localStorage.removeItem(_CHAVE_NOTIFICACOES_ATIVAS);
+  } catch (_) {}
+}
+
+async function _obterRegistroServiceWorker() {
+  if (!('serviceWorker' in navigator)) return null;
+  return navigator.serviceWorker.ready;
+}
+
+async function _removerInscricaoDoServidor(endpoint) {
+  if (!endpoint) return;
+
+  const resposta = await fetch('/api/notificacoes/desativar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint }),
+  });
+
+  if (!resposta.ok) {
+    const json = await resposta.json().catch(() => ({}));
+    throw new Error(json.error || 'Erro ao desativar notificações.');
+  }
+}
+
+async function _vincularInscricaoNaSala(inscricao) {
+  const sala = window._salaAtual;
+  const codigo = sala?.codigo || window._codigoSalaAtual;
+
+  if (!sala?.id || !codigo) {
+    throw new Error('Sala não selecionada.');
+  }
+
+  const resposta = await fetch('/api/notificacoes/inscricao', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sala_id: sala.id,
+      codigo,
+      subscription: inscricao.toJSON(),
+    }),
+  });
+
+  const json = await resposta.json().catch(() => ({}));
+  if (!resposta.ok) {
+    throw new Error(json.error || 'Erro ao ativar notificações.');
+  }
+}
+
+async function _ativarNotificacoesNoDispositivo() {
+  if (!('Notification' in window) || !('PushManager' in window)) return false;
+
+  const registro = await _obterRegistroServiceWorker();
+  if (!registro) return false;
+
+  const respostaConfig = await fetch('/api/notificacoes/config', {
+    cache: 'no-store',
+  });
+  const config = await respostaConfig.json().catch(() => ({}));
+
+  if (!respostaConfig.ok || !config.disponivel || !config.publicKey) {
+    return false;
+  }
+
+  const permissao = Notification.permission === 'granted'
+    ? 'granted'
+    : await Notification.requestPermission();
+
+  if (permissao !== 'granted') {
+    _salvarPreferenciaNotificacoes(false);
+    return false;
+  }
+
+  let inscricao = await registro.pushManager.getSubscription();
+
+  if (!inscricao) {
+    inscricao = await registro.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: _converterChaveVapid(config.publicKey),
+    });
+  }
+
+  await _vincularInscricaoNaSala(inscricao);
+  _salvarPreferenciaNotificacoes(true);
+  return true;
+}
+
+async function _desativarNotificacoesNoDispositivo() {
+  const registro = await _obterRegistroServiceWorker();
+  const inscricao = registro
+    ? await registro.pushManager.getSubscription()
+    : null;
+
+  if (inscricao) {
+    try {
+      await _removerInscricaoDoServidor(inscricao.endpoint);
+    } catch (erro) {
+      console.error('[notificacoes] Falha ao remover inscrição do servidor:', erro);
+    }
+
+    await inscricao.unsubscribe();
+  }
+
+  _salvarPreferenciaNotificacoes(false);
+  return false;
+}
+
+async function _sincronizarNotificacoesComSalaAtual() {
+  if (!_notificacoesForamAtivadas()) return false;
+  if (!('Notification' in window) || Notification.permission !== 'granted') {
+    _salvarPreferenciaNotificacoes(false);
+    return false;
+  }
+
+  const registro = await _obterRegistroServiceWorker();
+  const inscricao = registro
+    ? await registro.pushManager.getSubscription()
+    : null;
+
+  if (!inscricao) {
+    _salvarPreferenciaNotificacoes(false);
+    return false;
+  }
+
+  if (!window._salaAtual?.id) {
+    await _removerInscricaoDoServidor(inscricao.endpoint);
+    return true;
+  }
+
+  await _vincularInscricaoNaSala(inscricao);
+  return true;
+}
+
+function _atualizarVisualControleNotificacoes(botao, ativa) {
+  if (!botao) return;
+  botao.classList.toggle('desativado', !ativa);
+  botao.setAttribute('aria-checked', String(ativa));
+  botao.setAttribute(
+    'aria-label',
+    ativa ? 'Notificações ativadas' : 'Notificações desativadas'
+  );
+}
+
+async function _inicializarControleNotificacoes(raiz) {
+  const botao = raiz?.querySelector('#botao-notificacoes');
+  if (!botao) return;
+
+  let ativa = false;
+
+  try {
+    ativa = await _sincronizarNotificacoesComSalaAtual();
+  } catch (erro) {
+    console.error('[notificacoes] Falha ao sincronizar:', erro);
+  }
+
+  _atualizarVisualControleNotificacoes(botao, ativa);
+
+  botao.addEventListener('click', async () => {
+    if (botao.disabled) return;
+    botao.disabled = true;
+
+    try {
+      const estavaAtiva = botao.getAttribute('aria-checked') === 'true';
+      ativa = estavaAtiva
+        ? await _desativarNotificacoesNoDispositivo()
+        : await _ativarNotificacoesNoDispositivo();
+    } catch (erro) {
+      ativa = false;
+      console.error('[notificacoes] Falha ao alterar estado:', erro);
+    } finally {
+      _atualizarVisualControleNotificacoes(botao, ativa);
+      botao.disabled = false;
+    }
+  });
+}
+
+function _lerDestinoAtividadeNotificacaoDaUrl() {
+  const url = new URL(window.location.href);
+  const atividadeId = url.searchParams.get('atividade');
+  const salaId = Number(url.searchParams.get('sala'));
+
+  if (!atividadeId || !Number.isInteger(salaId) || salaId <= 0) return null;
+
+  url.searchParams.delete('atividade');
+  url.searchParams.delete('sala');
+  history.replaceState(null, '', url.pathname + url.search + url.hash);
+
+  return { atividadeId: String(atividadeId), salaId };
+}
+
+function _solicitarSalaDaAtividadeNotificada() {
+  const modal = document.getElementById('modal-login-sala');
+  const campo = document.getElementById('campo-codigo-sala');
+
+  if (campo) campo.value = '';
+  if (modal) {
+    modal.style.pointerEvents = '';
+    modal.classList.add('aberto');
+  }
+
+  setTimeout(() => campo?.focus(), 50);
+}
+
+async function _abrirAtividadeNotificacaoPendente() {
+  const destino = _atividadeNotificacaoPendente;
+  if (!destino || _abrindoAtividadeNotificacao) return false;
+
+  if (Number(window._salaAtual?.id) !== Number(destino.salaId)) {
+    _solicitarSalaDaAtividadeNotificada();
+    return false;
+  }
+
+  _abrindoAtividadeNotificacao = true;
+
+  try {
+    await carregarDadosAtividades();
+
+    const atividade = todosDados.find(item => {
+      return String(item.id) === String(destino.atividadeId);
+    });
+
+    if (!atividade?.data) {
+      _atividadeNotificacaoPendente = null;
+      return false;
+    }
+
+    const [dia, mes, ano] = atividade.data.split('/').map(Number);
+    if (!dia || !mes || !ano) return false;
+
+    mesAtual = mes - 1;
+    anoAtual = ano;
+
+    const botaoCalendario = document.getElementById('btn-calendario');
+    if (botaoCalendario) botaoCalendario.click();
+
+    renderizarCalendarioComEventos();
+    abrirPainelDia(dia, mes - 1, atividade.data);
+    alternarFiltroLocal(normalizarTexto(atividade.local));
+
+    const card = Array.from(
+      document.querySelectorAll('#lista-atividades-dia .card-atividade')
+    ).find(elemento => {
+      return String(elemento.dataset.itemId) === String(destino.atividadeId);
+    });
+
+    if (card) {
+      const titulo = card.querySelector('.card-titulo');
+      if (!card.classList.contains('aberto')) titulo?.click();
+      card.classList.add('atividade-destacada-notificacao');
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => {
+        card.classList.remove('atividade-destacada-notificacao');
+      }, 3800);
+    }
+
+    _atividadeNotificacaoPendente = null;
+    return Boolean(card);
+  } catch (erro) {
+    console.error('[notificacoes] Falha ao abrir atividade:', erro);
+    return false;
+  } finally {
+    _abrindoAtividadeNotificacao = false;
+  }
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', evento => {
+    if (evento.data?.type !== 'abrir-atividade') return;
+
+    const salaId = Number(evento.data.salaId);
+    const atividadeId = String(evento.data.atividadeId || '');
+    if (!atividadeId || !Number.isInteger(salaId) || salaId <= 0) return;
+
+    _atividadeNotificacaoPendente = { atividadeId, salaId };
+    _abrirAtividadeNotificacaoPendente();
+  });
+}
+
+window.addEventListener('load', () => {
+  _atividadeNotificacaoPendente = _lerDestinoAtividadeNotificacaoDaUrl();
+
+  _sincronizarNotificacoesComSalaAtual().catch(erro => {
+    console.error('[notificacoes] Falha ao restaurar inscrição:', erro);
+  });
+
+  if (_atividadeNotificacaoPendente) {
+    setTimeout(_abrirAtividadeNotificacaoPendente, 250);
+  }
+});
+
+
+/* ══════════════════════════════════════════════════════════
    Busca de URL assinada para anexos — API REST
    ══════════════════════════════════════════════════════════ */
 async function obterUrlAssinadaArquivo(path) {
@@ -1276,6 +1599,14 @@ atualizarFavicon();
         return;
       }
 
+      if (
+        _atividadeNotificacaoPendente &&
+        Number(json.id) !== Number(_atividadeNotificacaoPendente.salaId)
+      ) {
+        mostrarErro('Código da sala da atividade incorreto.');
+        return;
+      }
+
       /* Código correto — salva sala e fecha o modal */
       window._salaAtual = { id: json.id, nome: json.nome, codigo: json.codigo };
       window._codigoSalaAtual = json.codigo; // compatibilidade com código existente
@@ -1289,6 +1620,14 @@ atualizarFavicon();
       const _btnAtivo = document.querySelector('.nav-btn.active');
       carregarDadosAtividades().then(() => {
         if (_btnAtivo) renderAbaAtiva(_btnAtivo.id);
+
+        _sincronizarNotificacoesComSalaAtual().catch(erro => {
+          console.error('[notificacoes] Falha ao trocar de sala:', erro);
+        });
+
+        if (_atividadeNotificacaoPendente) {
+          _abrirAtividadeNotificacaoPendente();
+        }
       });
 
     } catch (e) {
@@ -4140,6 +4479,14 @@ function _htmlConteudoManual(abaId) {
           <span class="manual-config-item-label manual-config-label-sala">sala atual:</span><strong class="manual-config-item-valor manual-config-valor-sala">${_escapeHtmlManual(sala)}</strong>
         </div>
       </li>${liCodigo}
+      <li id="manual-config-li-notificacoes">
+        <div class="manual-config-item manual-config-item-notificacoes">
+          <span class="manual-config-item-label manual-config-label-notificacoes">notificações:</span>
+          <button id="botao-notificacoes" class="manual-config-slider desativado" type="button" role="switch" aria-checked="false" aria-label="Notificações desativadas">
+            <span class="trilha-fundo-notificacoes"><span class="botao-bola-notificacoes"></span></span>
+          </button>
+        </div>
+      </li>
       <li id="manual-config-li-sair">
         <button id="botao-sair-sala" type="button" class="manual-config-sair-sala"><h2 id="manual-config-sair-sala-texto">sair</h2></button>
       </li>`;
@@ -4398,6 +4745,8 @@ function abrirModalManual(abaId, aoFechar) {
   }
 
   if (abaId === 'btn-config') {
+    _inicializarControleNotificacoes(_modalManualEl);
+
     const btnSairSala = _modalManualEl.querySelector('#botao-sair-sala');
     if (btnSairSala) {
       btnSairSala.addEventListener('click', async () => {

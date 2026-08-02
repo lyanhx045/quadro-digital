@@ -1,10 +1,11 @@
-const CACHE = 'quadro-v1.1.9';
+const CACHE = 'quadro-v1.2.0';
 
 const ARQUIVOS_OFFLINE = [
   '/index.html',
   '/index.css',
   '/index.js',
-  '/manifest.json'
+  '/manifest.json',
+  '/icons/notificacao-192.png'
 ];
 
 self.addEventListener('install', event => {
@@ -39,6 +40,65 @@ self.addEventListener('activate', event => {
       await self.clients.claim();
     })()
   );
+});
+
+self.addEventListener('push', event => {
+  let dados = {};
+
+  try {
+    dados = event.data ? event.data.json() : {};
+  } catch (_) {
+    dados = {
+      title: 'Quadro Digital',
+      body: event.data ? event.data.text() : '',
+    };
+  }
+
+  const title = dados.title || 'Quadro Digital';
+  const options = {
+    body: dados.body || '',
+    icon: dados.icon || '/icons/notificacao-192.png',
+    tag: dados.tag,
+    data: dados.data || {},
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+
+  const dados = event.notification.data || {};
+  const atividadeId = String(dados.atividadeId || '');
+  const salaId = Number(dados.salaId);
+  const destino = new URL(dados.url || '/', self.location.origin).href;
+
+  event.waitUntil((async () => {
+    const janelas = await self.clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true,
+    });
+
+    const janelaDoSite = janelas.find(janela => {
+      return new URL(janela.url).origin === self.location.origin;
+    });
+
+    if (janelaDoSite) {
+      await janelaDoSite.focus();
+
+      if (atividadeId && Number.isInteger(salaId) && salaId > 0) {
+        janelaDoSite.postMessage({
+          type: 'abrir-atividade',
+          atividadeId,
+          salaId,
+        });
+      }
+
+      return;
+    }
+
+    await self.clients.openWindow(destino);
+  })());
 });
 
 self.addEventListener('fetch', event => {

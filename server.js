@@ -7,10 +7,34 @@ const { IncomingForm } = require('formidable');
 const { createClient } = require('@supabase/supabase-js');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const webpush = require('web-push');
 
 const PORT = process.env.PORT || 3000;
 const RAIZ = __dirname;
 const BUCKET = 'anexos';
+const FUSO_NOTIFICACOES = 'America/Sao_Paulo';
+
+const VAPID_PUBLIC_KEY = String(process.env.VAPID_PUBLIC_KEY || '').trim();
+const VAPID_PRIVATE_KEY = String(process.env.VAPID_PRIVATE_KEY || '').trim();
+const NOTIFICACOES_CRON_SECRET = String(
+  process.env.NOTIFICACOES_CRON_SECRET || ''
+).trim();
+const VAPID_SUBJECT = String(
+  process.env.VAPID_SUBJECT ||
+  process.env.SITE_URL ||
+  'mailto:admin@quadro-digital.local'
+).trim();
+
+let notificacoesConfiguradas = Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
+
+if (notificacoesConfiguradas) {
+  try {
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+  } catch (erro) {
+    notificacoesConfiguradas = false;
+    console.error('[notificacoes] Chaves VAPID inválidas:', erro.message);
+  }
+}
 
 // Conecta no Supabase com as variáveis de ambiente
 const supabase = createClient(
@@ -153,6 +177,430 @@ const MATERIAS = ['MATEMÁTICA', 'ITINERÁRIO', 'LINGUAGENS', 'HUMANAS', 'NATURE
 function converterDataBrParaIso(d, m, a) {
   if (!d || !m || !a) return null;
   return `${a}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+/* ============================================================
+   NOTIFICAÇÕES PUSH
+   ============================================================ */
+
+const formatadorDataHoraBrasil = new Intl.DateTimeFormat('en-CA', {
+  timeZone: FUSO_NOTIFICACOES,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+function lerCorpoJson(req, limite = 64 * 1024) {
+  return new Promise((resolve, reject) => {
+    let corpo = '';
+    let excedeuLimite = false;
+
+    req.on('data', parte => {
+      if (excedeuLimite) return;
+      corpo += parte;
+      if (Buffer.byteLength(corpo) > limite) excedeuLimite = true;
+    });
+
+    req.on('end', () => {
+      if (excedeuLimite) {
+        reject(new Error('Corpo da requisição muito grande'));
+        return;
+      }
+
+      try {
+        resolve(corpo ? JSON.parse(corpo) : {});
+      } catch (erro) {
+        reject(new Error('JSON inválido: ' + erro.message));
+      }
+    });
+
+    req.on('error', reject);
+  });
+}
+
+function obterPartesDataHoraBrasil(data = new Date()) {
+  const partes = {};
+
+  formatadorDataHoraBrasil.formatToParts(data).forEach(parte => {
+    if (parte.type !== 'literal') partes[parte.type] = parte.value;
+  });
+
+  return {
+    data: `${partes.year}-${partes.month}-${partes.day}`,
+    hora: Number(partes.hour),
+    minuto: Number(partes.minute),
+  };
+}
+
+function normalizarDataIso(valor) {
+  const data = String(valor || '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(data) ? data : null;
+}
+
+function adicionarDiasDataIso(dataIso, quantidade) {
+  const dataNormalizada = normalizarDataIso(dataIso);
+  if (!dataNormalizada) return null;
+
+  const [ano, mes, dia] = dataNormalizada.split('-').map(Number);
+  const data = new Date(Date.UTC(ano, mes - 1, dia + quantidade));
+  return data.toISOString().slice(0, 10);
+}
+
+function formatarDataCurta(dataIso) {
+  const dataNormalizada = normalizarDataIso(dataIso);
+  if (!dataNormalizada) return '';
+  const [ano, mes, dia] = dataNormalizada.split('-');
+  return `${dia}/${mes}`;
+}
+
+function normalizarTextoNotificacao(valor) {
+  return String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function obterTipoNotificacao(atividade) {
+  const tipo = normalizarTextoNotificacao(atividade?.tipo);
+  return ['prova', 'teste', 'projeto', 'tarefa'].includes(tipo)
+    ? tipo
+    : 'tarefa';
+}
+
+function formatarDisciplinaNotificacao(valor) {
+  const texto = String(valor || 'GERAL').trim().toLocaleLowerCase('pt-BR');
+  return texto.replace(/(^|[\s-])([a-záàâãéèêíïóôõöúç])/giu, (_, inicio, letra) => {
+    return inicio + letra.toLocaleUpperCase('pt-BR');
+  });
+}
+
+function limitarTextoNotificacao(valor, limite) {
+  const texto = String(valor || '').replace(/\s+/g, ' ').trim();
+  if (texto.length <= limite) return texto;
+  return texto.slice(0, Math.max(0, limite - 1)).trimEnd() + '…';
+}
+
+function criarTextoNotificacao(atividade, evento, opcoes = {}) {
+  const tipo = obterTipoNotificacao(atividade);
+  const local = normalizarTextoNotificacao(atividade.local) === 'casa' ? 'casa' : 'sala';
+  const disciplina = formatarDisciplinaNotificacao(atividade.area);
+  const descricao = limitarTextoNotificacao(
+    atividade.descricao_titulo || 'Sem título',
+    90
+  );
+
+  const titulosPublicacao = {
+    prova: 'Nova prova',
+    teste: 'Novo teste',
+    projeto: 'Novo projeto',
+    tarefa: 'Nova tarefa',
+  };
+
+  const titulosAlteracao = {
+    prova: 'Data da prova alterada',
+    teste: 'Data do teste alterada',
+    projeto: 'Data do projeto alterada',
+    tarefa: 'Data da tarefa alterada',
+  };
+
+  const titulosCancelamento = {
+    prova: 'Prova cancelada',
+    teste: 'Teste cancelado',
+    projeto: 'Projeto cancelado',
+    tarefa: 'Tarefa cancelada',
+  };
+
+  const titulosAmanha = {
+    prova: 'Prova amanhã',
+    teste: 'Teste amanhã',
+    projeto: 'Projeto para amanhã',
+    tarefa: 'Tarefa para amanhã',
+  };
+
+  let titulo;
+  let dataTexto = formatarDataCurta(atividade.data);
+
+  if (evento === 'publicacao') {
+    titulo = titulosPublicacao[tipo];
+  } else if (evento === 'prova-3-dias') {
+    titulo = 'Prova em 3 dias';
+  } else if (evento === 'lembrete-1-dia') {
+    titulo = titulosAmanha[tipo];
+  } else if (evento === 'alteracao-data') {
+    titulo = titulosAlteracao[tipo];
+    dataTexto = `${formatarDataCurta(opcoes.dataAnterior)} → ${formatarDataCurta(atividade.data)}`;
+  } else {
+    titulo = titulosCancelamento[tipo];
+  }
+
+  return {
+    titulo: `${titulo} • ${local}`,
+    subtitulo: `${disciplina} — ${descricao} • ${dataTexto}`,
+  };
+}
+
+async function listarInscricoesDaSala(salaId) {
+  const { data, error } = await supabase
+    .from('notificacoes_inscricoes')
+    .select('id, endpoint, p256dh, auth')
+    .eq('sala_id', salaId);
+
+  if (error) throw error;
+  return data || [];
+}
+
+async function removerInscricaoExpirada(id) {
+  const { error } = await supabase
+    .from('notificacoes_inscricoes')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('[notificacoes] Falha ao remover inscrição expirada:', error.message);
+  }
+}
+
+async function enviarNotificacaoDaAtividade(atividade, evento, opcoes = {}) {
+  if (!notificacoesConfiguradas) return { enviadas: 0, falhas: 0 };
+
+  const salaId = Number(atividade.sala_id);
+  if (!Number.isInteger(salaId) || salaId <= 0) {
+    return { enviadas: 0, falhas: 0 };
+  }
+
+  const inscricoes = await listarInscricoesDaSala(salaId);
+  if (inscricoes.length === 0) return { enviadas: 0, falhas: 0 };
+
+  const texto = criarTextoNotificacao(atividade, evento, opcoes);
+  const atividadeId = String(atividade.id);
+  const url = `/?atividade=${encodeURIComponent(atividadeId)}&sala=${encodeURIComponent(salaId)}`;
+  const payload = JSON.stringify({
+    title: texto.titulo,
+    body: texto.subtitulo,
+    icon: '/icons/notificacao-192.png',
+    tag: `atividade-${atividadeId}-${evento}`,
+    data: {
+      atividadeId,
+      salaId,
+      url,
+    },
+  });
+
+  const resultados = await Promise.allSettled(inscricoes.map(async inscricao => {
+    try {
+      await webpush.sendNotification({
+        endpoint: inscricao.endpoint,
+        keys: {
+          p256dh: inscricao.p256dh,
+          auth: inscricao.auth,
+        },
+      }, payload, {
+        TTL: 24 * 60 * 60,
+        urgency: 'normal',
+      });
+
+      return true;
+    } catch (erro) {
+      if (erro?.statusCode === 404 || erro?.statusCode === 410) {
+        await removerInscricaoExpirada(inscricao.id);
+        return false;
+      }
+
+      throw erro;
+    }
+  }));
+
+  let enviadas = 0;
+  let falhas = 0;
+
+  resultados.forEach(resultado => {
+    if (resultado.status === 'fulfilled' && resultado.value) {
+      enviadas += 1;
+    } else {
+      falhas += 1;
+      if (resultado.status === 'rejected') {
+        console.error('[notificacoes] Falha no envio:', resultado.reason?.message || resultado.reason);
+      }
+    }
+  });
+
+  return { enviadas, falhas };
+}
+
+async function registrarEventoUnico(atividadeId, evento, dataReferencia) {
+  const { error } = await supabase
+    .from('notificacoes_eventos')
+    .insert([{
+      atividade_id: String(atividadeId),
+      evento,
+      data_referencia: dataReferencia,
+    }]);
+
+  if (!error) return true;
+  if (error.code === '23505') return false;
+  throw error;
+}
+
+async function eventoFoiRegistrado(atividadeId, evento, dataReferencia) {
+  let query = supabase
+    .from('notificacoes_eventos')
+    .select('id')
+    .eq('atividade_id', String(atividadeId))
+    .eq('evento', evento)
+    .limit(1);
+
+  if (dataReferencia) query = query.eq('data_referencia', dataReferencia);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return Array.isArray(data) && data.length > 0;
+}
+
+async function marcarAtividadeAnunciada(atividade) {
+  const data = normalizarDataIso(atividade.data);
+  if (!data) return;
+
+  try {
+    await registrarEventoUnico(atividade.id, 'anuncio', data);
+  } catch (erro) {
+    console.error('[notificacoes] Falha ao registrar anúncio:', erro.message);
+  }
+}
+
+function deveNotificarPublicacao(atividade) {
+  const dataAtividade = normalizarDataIso(atividade.data);
+  if (!dataAtividade) return false;
+
+  const hoje = obterPartesDataHoraBrasil().data;
+  if (dataAtividade < hoje) return false;
+
+  const local = normalizarTextoNotificacao(atividade.local);
+  if (dataAtividade === hoje && local === 'sala') return false;
+
+  return true;
+}
+
+async function processarPublicacaoAtividade(atividade) {
+  const hoje = obterPartesDataHoraBrasil().data;
+
+  try {
+    await registrarEventoUnico(atividade.id, 'publicacao', hoje);
+  } catch (erro) {
+    console.error('[notificacoes] Falha ao registrar publicação:', erro.message);
+  }
+
+  if (!deveNotificarPublicacao(atividade)) return;
+
+  await marcarAtividadeAnunciada(atividade);
+  await enviarNotificacaoDaAtividade(atividade, 'publicacao');
+}
+
+async function processarAlteracaoData(atividadeAnterior, atividadeAtual) {
+  const dataAnterior = normalizarDataIso(atividadeAnterior.data);
+  const dataAtual = normalizarDataIso(atividadeAtual.data);
+
+  if (!dataAnterior || !dataAtual || dataAnterior === dataAtual) return;
+
+  const hoje = obterPartesDataHoraBrasil().data;
+  if (dataAtual < hoje) return;
+
+  await marcarAtividadeAnunciada(atividadeAtual);
+  await enviarNotificacaoDaAtividade(atividadeAtual, 'alteracao-data', {
+    dataAnterior,
+  });
+}
+
+async function processarCancelamentoAtividade(atividade, atividadeAnunciada) {
+  const dataAtividade = normalizarDataIso(atividade.data);
+  if (!dataAtividade) return;
+
+  const hoje = obterPartesDataHoraBrasil().data;
+  if (dataAtividade < hoje) return;
+
+  const deveAvisar = dataAtividade > hoje || atividadeAnunciada;
+  if (!deveAvisar) return;
+
+  await enviarNotificacaoDaAtividade(atividade, 'cancelamento');
+}
+
+async function limparEventosDaAtividade(atividadeId) {
+  const { error } = await supabase
+    .from('notificacoes_eventos')
+    .delete()
+    .eq('atividade_id', String(atividadeId));
+
+  if (error) {
+    console.error('[notificacoes] Falha ao limpar eventos:', error.message);
+  }
+}
+
+let processamentoLembretesEmAndamento = false;
+let dataUltimaLimpezaEventos = null;
+
+async function enviarLembreteUnico(atividade, evento, hoje) {
+  if (await eventoFoiRegistrado(atividade.id, 'publicacao', hoje)) return;
+
+  const reservado = await registrarEventoUnico(atividade.id, evento, hoje);
+  if (!reservado) return;
+
+  await marcarAtividadeAnunciada(atividade);
+  await enviarNotificacaoDaAtividade(atividade, evento);
+}
+
+async function processarLembretesAgendados() {
+  if (!notificacoesConfiguradas || processamentoLembretesEmAndamento) return;
+
+  const agoraBrasil = obterPartesDataHoraBrasil();
+  if (agoraBrasil.hora < 18) return;
+
+  processamentoLembretesEmAndamento = true;
+
+  try {
+    const hoje = agoraBrasil.data;
+    const amanha = adicionarDiasDataIso(hoje, 1);
+    const daquiTresDias = adicionarDiasDataIso(hoje, 3);
+
+    const { data: atividades, error } = await supabase
+      .from('atividades')
+      .select('id, area, tipo, data, local, descricao_titulo, sala_id')
+      .in('data', [amanha, daquiTresDias]);
+
+    if (error) throw error;
+
+    for (const atividade of atividades || []) {
+      const dataAtividade = normalizarDataIso(atividade.data);
+      const tipo = obterTipoNotificacao(atividade);
+
+      if (dataAtividade === daquiTresDias && tipo === 'prova') {
+        await enviarLembreteUnico(atividade, 'prova-3-dias', hoje);
+      }
+
+      if (dataAtividade === amanha) {
+        await enviarLembreteUnico(atividade, 'lembrete-1-dia', hoje);
+      }
+    }
+
+    if (dataUltimaLimpezaEventos !== hoje) {
+      dataUltimaLimpezaEventos = hoje;
+      const limite = adicionarDiasDataIso(hoje, -45);
+      const { error: erroLimpeza } = await supabase
+        .from('notificacoes_eventos')
+        .delete()
+        .lt('data_referencia', limite);
+
+      if (erroLimpeza) {
+        console.error('[notificacoes] Falha na limpeza de eventos:', erroLimpeza.message);
+      }
+    }
+  } catch (erro) {
+    console.error('[notificacoes] Falha ao processar lembretes:', erro.message);
+  } finally {
+    processamentoLembretesEmAndamento = false;
+  }
 }
 
 // Determina Content-Type pelo tipo de arquivo
@@ -470,6 +918,148 @@ const server = http.createServer(async (req, res) => {
     });
 
     return res.end(JSON.stringify({ ok: true }));
+  }
+
+  // --- API: configuração pública das notificações
+  if (req.method === 'GET' && urlPath === '/api/notificacoes/config') {
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+    });
+
+    return res.end(JSON.stringify({
+      disponivel: notificacoesConfiguradas,
+      publicKey: notificacoesConfiguradas ? VAPID_PUBLIC_KEY : null,
+    }));
+  }
+
+  // --- API: acionada diariamente pelo pg_cron do Supabase às 18:00
+  if (
+    req.method === 'POST' &&
+    urlPath === '/api/notificacoes/processar-lembretes'
+  ) {
+    const autorizacao = String(req.headers.authorization || '');
+    const tokenRecebido = autorizacao.startsWith('Bearer ')
+      ? autorizacao.slice(7)
+      : '';
+    const recebido = Buffer.from(tokenRecebido);
+    const esperado = Buffer.from(NOTIFICACOES_CRON_SECRET);
+    const autorizado = Boolean(
+      NOTIFICACOES_CRON_SECRET &&
+      recebido.length === esperado.length &&
+      crypto.timingSafeEqual(recebido, esperado)
+    );
+
+    if (!autorizado) {
+      res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ error: 'Não autorizado' }));
+    }
+
+    await processarLembretesAgendados();
+
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+    });
+    return res.end(JSON.stringify({ ok: true }));
+  }
+
+  // --- API: vincular este navegador à sala atual
+  if (req.method === 'POST' && urlPath === '/api/notificacoes/inscricao') {
+    try {
+      if (!notificacoesConfiguradas) {
+        res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ error: 'Notificações indisponíveis' }));
+      }
+
+      const corpo = await lerCorpoJson(req);
+      const salaId = Number(corpo.sala_id);
+      const codigo = String(corpo.codigo || '').trim();
+      const inscricao = corpo.subscription || {};
+      const endpoint = String(inscricao.endpoint || '').trim();
+      const p256dh = String(inscricao.keys?.p256dh || '').trim();
+      const auth = String(inscricao.keys?.auth || '').trim();
+
+      if (
+        !Number.isInteger(salaId) ||
+        salaId <= 0 ||
+        !codigo ||
+        !endpoint.startsWith('https://') ||
+        endpoint.length > 4096 ||
+        !p256dh ||
+        !auth
+      ) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ error: 'Inscrição inválida' }));
+      }
+
+      const { data: sala, error: erroSala } = await supabase
+        .from('salas')
+        .select('id')
+        .eq('id', salaId)
+        .eq('codigo', codigo)
+        .maybeSingle();
+
+      if (erroSala) throw erroSala;
+
+      if (!sala) {
+        res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ error: 'Sala não autorizada' }));
+      }
+
+      const agora = new Date().toISOString();
+      const { error } = await supabase
+        .from('notificacoes_inscricoes')
+        .upsert([{
+          endpoint,
+          p256dh,
+          auth,
+          sala_id: salaId,
+          atualizado_em: agora,
+        }], {
+          onConflict: 'endpoint',
+        });
+
+      if (error) throw error;
+
+      res.writeHead(200, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+      });
+      return res.end(JSON.stringify({ ok: true }));
+    } catch (erro) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ error: erro.message }));
+    }
+  }
+
+  // --- API: remover a inscrição deste navegador
+  if (req.method === 'POST' && urlPath === '/api/notificacoes/desativar') {
+    try {
+      const corpo = await lerCorpoJson(req);
+      const endpoint = String(corpo.endpoint || '').trim();
+
+      if (!endpoint || endpoint.length > 4096) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ error: 'Endpoint inválido' }));
+      }
+
+      const { error } = await supabase
+        .from('notificacoes_inscricoes')
+        .delete()
+        .eq('endpoint', endpoint);
+
+      if (error) throw error;
+
+      res.writeHead(200, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+      });
+      return res.end(JSON.stringify({ ok: true }));
+    } catch (erro) {
+      res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify({ error: erro.message }));
+    }
   }
 
   const metodoProtegido = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
@@ -906,6 +1496,34 @@ const server = http.createServer(async (req, res) => {
     try {
       const id = urlPath.split('/').pop();
 
+      let queryAtividade = supabase
+        .from('atividades')
+        .select('id, area, tipo, data, local, descricao_titulo, sala_id')
+        .eq('id', id);
+
+      queryAtividade = restringirQueryASala(queryAtividade, req);
+
+      const { data: atividade, error: erroAtividade } = await queryAtividade
+        .maybeSingle();
+
+      if (erroAtividade) {
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ error: erroAtividade.message }));
+      }
+
+      if (!atividade) {
+        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+        return res.end(JSON.stringify({ error: 'Atividade não encontrada nesta sala' }));
+      }
+
+      let atividadeAnunciada = false;
+
+      try {
+        atividadeAnunciada = await eventoFoiRegistrado(id, 'anuncio');
+      } catch (erro) {
+        console.error('[notificacoes] Falha ao consultar anúncio:', erro.message);
+      }
+
       let query = supabase
         .from('atividades')
         .delete()
@@ -926,6 +1544,14 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
         return res.end(JSON.stringify({ error: 'Atividade não encontrada nesta sala' }));
       }
+
+      try {
+        await processarCancelamentoAtividade(atividade, atividadeAnunciada);
+      } catch (erro) {
+        console.error('[notificacoes] Falha ao avisar cancelamento:', erro.message);
+      }
+
+      await limparEventosDaAtividade(id);
 
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end(JSON.stringify({ ok: true }));
@@ -1020,6 +1646,28 @@ const server = http.createServer(async (req, res) => {
           const campos = JSON.parse(body);
           delete campos.sala_id;
 
+          let queryAnterior = supabase
+            .from('atividades')
+            .select('id, area, tipo, data, local, descricao_titulo, sala_id')
+            .eq('id', id);
+
+          queryAnterior = restringirQueryASala(queryAnterior, req);
+
+          const {
+            data: atividadeAnterior,
+            error: erroAtividadeAnterior,
+          } = await queryAnterior.maybeSingle();
+
+          if (erroAtividadeAnterior) {
+            res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+            return res.end(JSON.stringify({ error: erroAtividadeAnterior.message }));
+          }
+
+          if (!atividadeAnterior) {
+            res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+            return res.end(JSON.stringify({ error: 'Atividade não encontrada nesta sala' }));
+          }
+
           // Resolve nome → professor_id se vier o campo "professor" sem o id
           if (campos.professor && !campos.professor_id) {
             const { data: prof } = await supabase
@@ -1039,7 +1687,7 @@ const server = http.createServer(async (req, res) => {
           query = restringirQueryASala(query, req);
 
           const { data, error } = await query
-            .select('id')
+            .select('id, area, tipo, data, local, descricao_titulo, sala_id')
             .maybeSingle();
 
           if (error) {
@@ -1050,6 +1698,12 @@ const server = http.createServer(async (req, res) => {
           if (!data) {
             res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
             return res.end(JSON.stringify({ error: 'Atividade não encontrada nesta sala' }));
+          }
+
+          try {
+            await processarAlteracaoData(atividadeAnterior, data);
+          } catch (erro) {
+            console.error('[notificacoes] Falha ao avisar alteração de data:', erro.message);
           }
 
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -1159,13 +1813,21 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      const { error: dbErr } = await supabase
+      const { data: atividadeCriada, error: dbErr } = await supabase
         .from('atividades')
-        .insert([novoRegistro]);
+        .insert([novoRegistro])
+        .select('id, area, tipo, data, local, descricao_titulo, sala_id')
+        .single();
 
       if (dbErr) {
         res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
         return res.end('Erro banco: ' + dbErr.message);
+      }
+
+      try {
+        await processarPublicacaoAtividade(atividadeCriada);
+      } catch (erro) {
+        console.error('[notificacoes] Falha ao avisar publicação:', erro.message);
       }
 
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -1185,4 +1847,14 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`Servidor rodando → http://localhost:${PORT}`);
+
+  if (notificacoesConfiguradas) {
+    const inicioLembretes = setTimeout(processarLembretesAgendados, 5000);
+    inicioLembretes.unref?.();
+
+    const intervaloLembretes = setInterval(processarLembretesAgendados, 60 * 1000);
+    intervaloLembretes.unref?.();
+  } else {
+    console.warn('[notificacoes] Configure VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY no Render.');
+  }
 });
