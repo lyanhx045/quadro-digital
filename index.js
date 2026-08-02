@@ -228,6 +228,9 @@ async function carregarDadosAtividades() {
 const _CHAVE_NOTIFICACOES_ATIVAS = 'notificacoesAtivadas';
 let _atividadeNotificacaoPendente = null;
 let _abrindoAtividadeNotificacao = false;
+let _estadoNotificacoesAtual = null;
+let _sincronizacaoNotificacoesEmAndamento = null;
+let _destinoNotificacaoInvalidoNaUrl = false;
 
 function _converterChaveVapid(chaveBase64) {
   const preenchimento = '='.repeat((4 - (chaveBase64.length % 4)) % 4);
@@ -252,6 +255,8 @@ function _notificacoesForamAtivadas() {
   }
 }
 
+_estadoNotificacoesAtual = _notificacoesForamAtivadas();
+
 function _salvarPreferenciaNotificacoes(ativa) {
   try {
     if (ativa) localStorage.setItem(_CHAVE_NOTIFICACOES_ATIVAS, '1');
@@ -262,6 +267,20 @@ function _salvarPreferenciaNotificacoes(ativa) {
 async function _obterRegistroServiceWorker() {
   if (!('serviceWorker' in navigator)) return null;
   return navigator.serviceWorker.ready;
+}
+
+async function _fecharNotificacoesExibidas(atividadeId = null) {
+  const registro = await _obterRegistroServiceWorker();
+  if (!registro || typeof registro.getNotifications !== 'function') return;
+
+  const notificacoes = await registro.getNotifications();
+
+  notificacoes.forEach(notificacao => {
+    const idNotificacao = String(notificacao.data?.atividadeId || '');
+    if (atividadeId === null || idNotificacao === String(atividadeId)) {
+      notificacao.close();
+    }
+  });
 }
 
 async function _removerInscricaoDoServidor(endpoint) {
@@ -357,6 +376,12 @@ async function _desativarNotificacoesNoDispositivo() {
     await inscricao.unsubscribe();
   }
 
+  try {
+    await _fecharNotificacoesExibidas();
+  } catch (erro) {
+    console.error('[notificacoes] Falha ao fechar notificações exibidas:', erro);
+  }
+
   _salvarPreferenciaNotificacoes(false);
   return false;
 }
@@ -397,51 +422,99 @@ function _atualizarVisualControleNotificacoes(botao, ativa) {
   );
 }
 
-async function _inicializarControleNotificacoes(raiz) {
+function _definirEstadoNotificacoesAtual(ativa) {
+  _estadoNotificacoesAtual = Boolean(ativa);
+
+  document.querySelectorAll('#botao-notificacoes').forEach(botao => {
+    _atualizarVisualControleNotificacoes(botao, _estadoNotificacoesAtual);
+  });
+
+  return _estadoNotificacoesAtual;
+}
+
+function _sincronizarEstadoNotificacoesEmSegundoPlano() {
+  if (_sincronizacaoNotificacoesEmAndamento) {
+    return _sincronizacaoNotificacoesEmAndamento;
+  }
+
+  _sincronizacaoNotificacoesEmAndamento =
+    _sincronizarNotificacoesComSalaAtual()
+      .then(_definirEstadoNotificacoesAtual)
+      .catch(erro => {
+        console.error('[notificacoes] Falha ao sincronizar:', erro);
+        return _estadoNotificacoesAtual;
+      })
+      .finally(() => {
+        _sincronizacaoNotificacoesEmAndamento = null;
+      });
+
+  return _sincronizacaoNotificacoesEmAndamento;
+}
+
+function _inicializarControleNotificacoes(raiz) {
   const botao = raiz?.querySelector('#botao-notificacoes');
   if (!botao) return;
 
-  let ativa = false;
-
-  try {
-    ativa = await _sincronizarNotificacoesComSalaAtual();
-  } catch (erro) {
-    console.error('[notificacoes] Falha ao sincronizar:', erro);
-  }
-
-  _atualizarVisualControleNotificacoes(botao, ativa);
+  _atualizarVisualControleNotificacoes(botao, _estadoNotificacoesAtual);
 
   botao.addEventListener('click', async () => {
     if (botao.disabled) return;
     botao.disabled = true;
 
     try {
-      const estavaAtiva = botao.getAttribute('aria-checked') === 'true';
-      ativa = estavaAtiva
+      if (_sincronizacaoNotificacoesEmAndamento) {
+        await _sincronizacaoNotificacoesEmAndamento;
+      }
+
+      const estavaAtiva = _estadoNotificacoesAtual === true;
+      const ativa = estavaAtiva
         ? await _desativarNotificacoesNoDispositivo()
         : await _ativarNotificacoesNoDispositivo();
+
+      _definirEstadoNotificacoesAtual(ativa);
     } catch (erro) {
-      ativa = false;
       console.error('[notificacoes] Falha ao alterar estado:', erro);
+
+      await _sincronizarEstadoNotificacoesEmSegundoPlano();
     } finally {
-      _atualizarVisualControleNotificacoes(botao, ativa);
       botao.disabled = false;
     }
   });
+
+  _sincronizarEstadoNotificacoesEmSegundoPlano();
 }
 
 function _lerDestinoAtividadeNotificacaoDaUrl() {
   const url = new URL(window.location.href);
   const atividadeId = url.searchParams.get('atividade');
   const salaId = Number(url.searchParams.get('sala'));
+  const tinhaDestino = url.searchParams.has('atividade') || url.searchParams.has('sala');
 
-  if (!atividadeId || !Number.isInteger(salaId) || salaId <= 0) return null;
+  if (tinhaDestino) {
+    url.searchParams.delete('atividade');
+    url.searchParams.delete('sala');
+    history.replaceState(null, '', url.pathname + url.search + url.hash);
+  }
 
-  url.searchParams.delete('atividade');
-  url.searchParams.delete('sala');
-  history.replaceState(null, '', url.pathname + url.search + url.hash);
+  if (!atividadeId || !Number.isInteger(salaId) || salaId <= 0) {
+    _destinoNotificacaoInvalidoNaUrl = tinhaDestino;
+    return null;
+  }
 
   return { atividadeId: String(atividadeId), salaId };
+}
+
+function _abrirCalendarioInicialNotificacao() {
+  _atividadeNotificacaoPendente = null;
+
+  const botaoCalendario = document.getElementById('btn-calendario');
+  if (botaoCalendario) {
+    botaoCalendario.click();
+    return true;
+  }
+
+  window.location.replace('/');
+  return false;
 }
 
 function _solicitarSalaDaAtividadeNotificada() {
@@ -476,12 +549,13 @@ async function _abrirAtividadeNotificacaoPendente() {
     });
 
     if (!atividade?.data) {
-      _atividadeNotificacaoPendente = null;
-      return false;
+      return _abrirCalendarioInicialNotificacao();
     }
 
     const [dia, mes, ano] = atividade.data.split('/').map(Number);
-    if (!dia || !mes || !ano) return false;
+    if (!dia || !mes || !ano) {
+      return _abrirCalendarioInicialNotificacao();
+    }
 
     mesAtual = mes - 1;
     anoAtual = ano;
@@ -499,21 +573,23 @@ async function _abrirAtividadeNotificacaoPendente() {
       return String(elemento.dataset.itemId) === String(destino.atividadeId);
     });
 
-    if (card) {
-      const titulo = card.querySelector('.card-titulo');
-      if (!card.classList.contains('aberto')) titulo?.click();
-      card.classList.add('atividade-destacada-notificacao');
-      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setTimeout(() => {
-        card.classList.remove('atividade-destacada-notificacao');
-      }, 3800);
+    if (!card) {
+      return _abrirCalendarioInicialNotificacao();
     }
 
+    const titulo = card.querySelector('.card-titulo');
+    if (!card.classList.contains('aberto')) titulo?.click();
+    card.classList.add('atividade-destacada-notificacao');
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => {
+      card.classList.remove('atividade-destacada-notificacao');
+    }, 3800);
+
     _atividadeNotificacaoPendente = null;
-    return Boolean(card);
+    return true;
   } catch (erro) {
     console.error('[notificacoes] Falha ao abrir atividade:', erro);
-    return false;
+    return _abrirCalendarioInicialNotificacao();
   } finally {
     _abrindoAtividadeNotificacao = false;
   }
@@ -521,11 +597,19 @@ async function _abrirAtividadeNotificacaoPendente() {
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', evento => {
+    if (evento.data?.type === 'abrir-calendario') {
+      _abrirCalendarioInicialNotificacao();
+      return;
+    }
+
     if (evento.data?.type !== 'abrir-atividade') return;
 
     const salaId = Number(evento.data.salaId);
     const atividadeId = String(evento.data.atividadeId || '');
-    if (!atividadeId || !Number.isInteger(salaId) || salaId <= 0) return;
+    if (!atividadeId || !Number.isInteger(salaId) || salaId <= 0) {
+      _abrirCalendarioInicialNotificacao();
+      return;
+    }
 
     _atividadeNotificacaoPendente = { atividadeId, salaId };
     _abrirAtividadeNotificacaoPendente();
@@ -535,12 +619,12 @@ if ('serviceWorker' in navigator) {
 window.addEventListener('load', () => {
   _atividadeNotificacaoPendente = _lerDestinoAtividadeNotificacaoDaUrl();
 
-  _sincronizarNotificacoesComSalaAtual().catch(erro => {
-    console.error('[notificacoes] Falha ao restaurar inscrição:', erro);
-  });
+  _sincronizarEstadoNotificacoesEmSegundoPlano();
 
   if (_atividadeNotificacaoPendente) {
     setTimeout(_abrirAtividadeNotificacaoPendente, 250);
+  } else if (_destinoNotificacaoInvalidoNaUrl) {
+    setTimeout(_abrirCalendarioInicialNotificacao, 250);
   }
 });
 
@@ -1621,9 +1705,7 @@ atualizarFavicon();
       carregarDadosAtividades().then(() => {
         if (_btnAtivo) renderAbaAtiva(_btnAtivo.id);
 
-        _sincronizarNotificacoesComSalaAtual().catch(erro => {
-          console.error('[notificacoes] Falha ao trocar de sala:', erro);
-        });
+        _sincronizarEstadoNotificacoesEmSegundoPlano();
 
         if (_atividadeNotificacaoPendente) {
           _abrirAtividadeNotificacaoPendente();

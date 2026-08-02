@@ -1,4 +1,4 @@
-const CACHE = 'quadro-v1.2.0';
+const CACHE = 'quadro-v1.2.1';
 
 const ARQUIVOS_OFFLINE = [
   '/index.html',
@@ -7,6 +7,19 @@ const ARQUIVOS_OFFLINE = [
   '/manifest.json',
   '/icons/notificacao-192.png'
 ];
+
+async function fecharNotificacoesExibidas(atividadeId = null) {
+  if (typeof self.registration.getNotifications !== 'function') return;
+
+  const notificacoes = await self.registration.getNotifications();
+
+  notificacoes.forEach(notificacao => {
+    const idNotificacao = String(notificacao.data?.atividadeId || '');
+    if (atividadeId === null || idNotificacao === String(atividadeId)) {
+      notificacao.close();
+    }
+  });
+}
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -37,6 +50,8 @@ self.addEventListener('activate', event => {
           .map(nome => caches.delete(nome))
       );
 
+      await fecharNotificacoesExibidas();
+
       await self.clients.claim();
     })()
   );
@@ -62,7 +77,15 @@ self.addEventListener('push', event => {
     data: dados.data || {},
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil((async () => {
+    const atividadeId = String(options.data.atividadeId || '');
+
+    if (atividadeId) {
+      await fecharNotificacoesExibidas(atividadeId);
+    }
+
+    await self.registration.showNotification(title, options);
+  })());
 });
 
 self.addEventListener('notificationclick', event => {
@@ -71,33 +94,50 @@ self.addEventListener('notificationclick', event => {
   const dados = event.notification.data || {};
   const atividadeId = String(dados.atividadeId || '');
   const salaId = Number(dados.salaId);
-  const destino = new URL(dados.url || '/', self.location.origin).href;
+  const destinoValido = Boolean(
+    atividadeId && Number.isInteger(salaId) && salaId > 0
+  );
+  let destino = new URL('/', self.location.origin).href;
+
+  if (destinoValido) {
+    try {
+      destino = new URL(dados.url || '/', self.location.origin).href;
+    } catch (_) {}
+  }
 
   event.waitUntil((async () => {
-    const janelas = await self.clients.matchAll({
-      type: 'window',
-      includeUncontrolled: true,
-    });
+    try {
+      if (atividadeId) await fecharNotificacoesExibidas(atividadeId);
 
-    const janelaDoSite = janelas.find(janela => {
-      return new URL(janela.url).origin === self.location.origin;
-    });
+      const janelas = await self.clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      });
 
-    if (janelaDoSite) {
-      await janelaDoSite.focus();
+      const janelaDoSite = janelas.find(janela => {
+        return new URL(janela.url).origin === self.location.origin;
+      });
 
-      if (atividadeId && Number.isInteger(salaId) && salaId > 0) {
-        janelaDoSite.postMessage({
-          type: 'abrir-atividade',
-          atividadeId,
-          salaId,
-        });
+      if (janelaDoSite) {
+        await janelaDoSite.focus();
+
+        if (destinoValido) {
+          janelaDoSite.postMessage({
+            type: 'abrir-atividade',
+            atividadeId,
+            salaId,
+          });
+        } else {
+          janelaDoSite.postMessage({ type: 'abrir-calendario' });
+        }
+
+        return;
       }
 
-      return;
+      await self.clients.openWindow(destino);
+    } catch (_) {
+      await self.clients.openWindow(new URL('/', self.location.origin).href);
     }
-
-    await self.clients.openWindow(destino);
   })());
 });
 
@@ -129,6 +169,9 @@ self.addEventListener('fetch', event => {
           if (respostaNova.ok) {
             const cache = await caches.open(CACHE);
             await cache.put(requisicao, respostaNova.clone());
+          } else if (requisicao.mode === 'navigate') {
+            const paginaInicial = await caches.match('/index.html');
+            if (paginaInicial) return paginaInicial;
           }
 
           return respostaNova;

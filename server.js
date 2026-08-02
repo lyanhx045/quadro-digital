@@ -382,7 +382,7 @@ async function enviarNotificacaoDaAtividade(atividade, evento, opcoes = {}) {
     title: texto.titulo,
     body: texto.subtitulo,
     icon: '/icons/notificacao-192.png',
-    tag: `atividade-${atividadeId}-${evento}`,
+    tag: `atividade-${atividadeId}`,
     data: {
       atividadeId,
       salaId,
