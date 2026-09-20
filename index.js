@@ -1,3 +1,24 @@
+/* Estado vazio compartilhado pelo Drive e pelas listas de atividades. */
+function criarEstadoVazioHTML(tipo) {
+  const mensagens = {
+    drive: ['nenhum drive disponível', 'Os drives compartilhados pelos professores aparecerão aqui.'],
+    atividades: ['nenhuma atividade', 'Não há atividades para este dia e local.'],
+    proximas: ['nenhuma atividade próxima', 'As próximas atividades aparecerão aqui quando estiverem disponíveis.']
+  };
+  const [titulo, descricao] = mensagens[tipo] || mensagens.atividades;
+  return `<div class="estado-vazio-xicara" role="status">
+    <svg class="estado-vazio-xicara__icone" viewBox="0 0 28 28" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+      <path class="estado-vazio-xicara__vapor" pathLength="1" d="M8 9 C6 7.4 10 6.4 8 4.8"/>
+      <path class="estado-vazio-xicara__vapor" pathLength="1" d="M13 8 C11 6.4 15 5.4 13 3.8"/>
+      <path class="estado-vazio-xicara__vapor" pathLength="1" d="M18 9 C16 7.4 20 6.4 18 4.8"/>
+      <path opacity=".6" d="M21 12.5 H23 A3 3 0 0 1 23 18.5 H20.8"/>
+      <path d="M5 12 H21 V17 A6 6 0 0 1 15 23 H11 A6 6 0 0 1 5 17 Z"/>
+      <path opacity=".8" d="M3.5 26 H22.5"/>
+    </svg>
+    <h3>${titulo}</h3><p>${descricao}</p>
+  </div>`;
+}
+
 /* ╔══════════════════════════════════════════════════════════════╗
    ║                                                              ║
    ║   ░░░  P A R T E   1  —  B A C K E N D  ░░░                 ║
@@ -1355,7 +1376,7 @@ function _exibirConfirmacaoApagar(card) {
         atualizarAlturasCardsAtividade();
         // Se não restarem cards, mostra mensagem vazia
         if (containerAtividades && containerAtividades.querySelectorAll('.card-atividade').length === 0) {
-          containerAtividades.innerHTML = `<div class="mensagem-vazia">nenhuma atividade</div>`;
+          containerAtividades.innerHTML = criarEstadoVazioHTML('atividades');
         }
         // Atualiza marcadores do calendário (remove ponto do dia se necessário)
         renderizarCalendarioComEventos();
@@ -2733,7 +2754,7 @@ function _iniciarCardDrive() {
   lista.innerHTML = '';
 
   if (_drives.length === 0) {
-    lista.innerHTML = `<div class="mensagem-vazia-drive">nenhum drive disponível</div>`;
+    lista.innerHTML = criarEstadoVazioHTML('drive');
     return;
   }
 
@@ -5808,7 +5829,7 @@ function renderizarListaAtividadesProximas() {
   lista.innerHTML = '';
   if (proximasCasaCache.length === 0) {
     const locais = [_filtroExibicao.sala && 'sala', _filtroExibicao.casa && 'casa'].filter(Boolean).join(' e ');
-    lista.innerHTML = `<div class="mensagem-vazia">nenhuma atividade próxima</div>`;
+    lista.innerHTML = criarEstadoVazioHTML('proximas');
     return;
   }
   proximasCasaCache.forEach(item => lista.appendChild(criarCardAtividadeProxima(item)));
@@ -6133,7 +6154,7 @@ function renderizarListaAtividadesDia() {
     item.data === dataSelecionadaStr
   );
   if (itens.length === 0) {
-    containerAtividades.innerHTML = `<div class="mensagem-vazia">nenhuma atividade</div>`;
+    containerAtividades.innerHTML = criarEstadoVazioHTML('atividades');
     return;
   }
   itens.forEach(item => criarCardAtividadeDia(item));
