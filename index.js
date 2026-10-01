@@ -121,6 +121,7 @@ function _vhFixoEmPx(valorVh) {
 
 /* Garante tempo mínimo de exibição do ícone antes de executar o callback */
 function _comTempoMinimo(promessa, ms, callback) {
+  if (document.getElementById('guia-sala')) ms = 0;
   const inicio = Date.now();
   promessa.then(function() {
     const decorrido = Date.now() - inicio;
@@ -240,6 +241,7 @@ async function carregarDadosAtividades() {
     console.error('Erro lendo banco:', error);
     todosDados = [];
   }
+  guiaSala.complementarDados();
 }
 
 
@@ -654,6 +656,8 @@ window.addEventListener('load', () => {
    Busca de URL assinada para anexos — API REST
    ══════════════════════════════════════════════════════════ */
 async function obterUrlAssinadaArquivo(path) {
+  const anexoGuia = guiaSala.urlAnexo(path);
+  if (anexoGuia) return anexoGuia;
   const r = await fetch(`/api/anexo?path=${encodeURIComponent(path)}`);
   const j = await r.json();
   if (!r.ok) throw new Error(j.error || 'Erro ao obter link do anexo');
@@ -1169,7 +1173,7 @@ function _interceptarCliqueCalendarioEditor(e) {
 }
 
 // ── MODO ADICIONAR — navega para o formulário e preenche a data ──
-function _abrirFormularioComData(dataStr) {
+async function _abrirFormularioComData(dataStr) {
   const partes = (dataStr || '').split('/');
   const dia = partes[0] || '';
   const mes = partes[1] || '';
@@ -1183,7 +1187,7 @@ function _abrirFormularioComData(dataStr) {
   }
 
   // Monta o formulário diretamente (sem .click())
-  abrirModalCadastroTarefa();
+  await abrirModalCadastroTarefa();
 
   // Preenche os campos depois que o DOM do formulário está pronto
   requestAnimationFrame(() => {
@@ -1520,6 +1524,7 @@ function formatarDataParaComparacao(dia, mes, ano) {
       .dia-teste   { --rgb1: var(--cor-teste-claro) !important;         --rgb2: var(--cor-teste) !important; }
       .dia-projeto { --rgb1: var(--cor-projeto-claro) !important;       --rgb2: var(--cor-projeto) !important; }
       .dia-tarefa  { --rgb1: var(--cor-tarefa-claro) !important;        --rgb2: var(--cor-tarefa) !important; }
+      .dia-evento { --rgb1: var(--cor-evento-claro) !important; --rgb2: var(--cor-evento) !important; }
     `;
 
     // Injeta o <style> com id fixo — o mesmo usado por _aplicarTema() mais tarde,
@@ -1725,6 +1730,8 @@ atualizarFavicon();
       const _btnAtivo = document.querySelector('.nav-btn.active');
       carregarDadosAtividades().then(() => {
         if (_btnAtivo) renderAbaAtiva(_btnAtivo.id);
+        /* INÍCIO/FIM — Agenda o guia após a entrada e o carregamento da sala. */
+        guiaSala.agendar();
 
         _sincronizarEstadoNotificacoesEmSegundoPlano();
 
@@ -1895,7 +1902,27 @@ const nomesAbas = {
 // Referência pela classe fixa — não perde o elemento quando o id muda
 const abaNome = document.querySelector('.aba-nome');
 
-function atualizarNomeAba(btnId) {
+let sequenciaNomeAba=0;
+let animacaoNomeAba=null;
+let nomeAbaInicializado=false;
+let ultimoIdNomeAba=null;
+async function atualizarNomeAba(btnId) {
+  if(!nomesAbas[btnId])return;
+  const ordem=[...document.querySelectorAll('.nav-btn')].map(el=>el.id);
+  const sentido=ordem.indexOf(btnId)>=ordem.indexOf(ultimoIdNomeAba)?1:-1;
+  ultimoIdNomeAba=btnId;
+  const seq=++sequenciaNomeAba;
+  animacaoNomeAba?.cancel();
+  if(!nomeAbaInicializado || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    nomeAbaInicializado=true; atualizarNomeAbaSemTransicao(btnId); return;
+  }
+  animacaoNomeAba=abaNome.animate([{opacity:1,translate:'0px'},{opacity:0,translate:(sentido*12)+'px'}],{duration:120,easing:'ease-in',fill:'both'});
+  await animacaoNomeAba.finished.catch(()=>{});
+  if(seq!==sequenciaNomeAba)return;
+  atualizarNomeAbaSemTransicao(btnId);animacaoNomeAba.cancel();
+  animacaoNomeAba=abaNome.animate([{opacity:0,translate:(-sentido*12)+'px'},{opacity:1,translate:'0px'}],{duration:220,easing:'ease-out'});
+}
+function atualizarNomeAbaSemTransicao(btnId) {
   const aba = nomesAbas[btnId];
   if (aba !== undefined) {
     abaNome.textContent = aba.nome;
@@ -1957,7 +1984,37 @@ function _garantirSalaLogada() {
   return false;
 }
 
-function renderAbaAtiva(btnId) {
+let transicaoPainelAtual = null;
+let sequenciaPainel = 0;
+let ultimoPainelId = "btn-calendario";
+async function renderAbaAtiva(btnId) {
+  const ordem=[...document.querySelectorAll('.nav-btn')].map(el=>el.id);
+  const sentido=ordem.indexOf(btnId)>=ordem.indexOf(ultimoPainelId)?1:-1;
+  ultimoPainelId=btnId;
+  return transicionarPainel(() => renderAbaAtivaSemTransicao(btnId), Boolean(conteudoAbas[btnId]), sentido);
+}
+async function transicionarPainel(renderizar, animarEntrada = true, sentido = 1) {
+  const sequencia=++sequenciaPainel;
+  const reduzir=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const painel=conteudoTipo;
+  const opacidade=getComputedStyle(painel).opacity;
+  const deslocamento=getComputedStyle(painel).translate;
+  transicaoPainelAtual?.cancel();
+  if (!reduzir && painel.children.length && getComputedStyle(painel).display!=='none') {
+    const saida=painel.animate([{opacity:opacidade,translate:deslocamento},{opacity:0,translate:(sentido*12)+'px'}],{duration:120,easing:'ease-in',fill:'both'});
+    transicaoPainelAtual=saida;
+    await saida.finished.catch(()=>{});
+    if(sequencia!==sequenciaPainel) return;
+    saida.cancel();
+  }
+  renderizar();
+  if(!reduzir && animarEntrada) {
+    const entrada=painel.animate([{opacity:0,translate:(-sentido*12)+'px'},{opacity:1,translate:'0px'}],{duration:220,easing:'ease-out',fill:'both'});
+    transicaoPainelAtual=entrada;
+    entrada.finished.then(()=>entrada.cancel()).catch(()=>{});
+  }
+}
+function renderAbaAtivaSemTransicao(btnId) {
   if (!_garantirSalaLogada()) return;
   const aba = conteudoAbas[btnId];
   if (!aba) {
@@ -2227,6 +2284,7 @@ function montarPainelConfig() {
     .dia-teste   { --rgb1: var(--cor-teste-claro) !important;         --rgb2: var(--cor-teste) !important; }
     .dia-projeto { --rgb1: var(--cor-projeto-claro) !important;       --rgb2: var(--cor-projeto) !important; }
     .dia-tarefa  { --rgb1: var(--cor-tarefa-claro) !important;        --rgb2: var(--cor-tarefa) !important; }
+      .dia-evento { --rgb1: var(--cor-evento-claro) !important; --rgb2: var(--cor-evento) !important; }
   `;
 
   // Reutiliza o elemento já criado pela IIFE de inicialização (se existir)
@@ -2602,7 +2660,7 @@ function _renderEstruturaMateriais() {
 
 /* Carrega os dados em background e atualiza o carrossel/drive */
 async function _carregarDadosMateriais() {
-  const _tempoMinimo = new Promise(res => setTimeout(res, 1700));
+  const _tempoMinimo = new Promise(res => setTimeout(res, document.getElementById('guia-sala') ? 0 : 1700));
   await Promise.all([carregarGradeAulas(), _tempoMinimo]);
 
   // Recarrega o carrossel de horário com os dados reais
@@ -2753,7 +2811,8 @@ function _iniciarCardDrive() {
 
   lista.innerHTML = '';
 
-  if (_drives.length === 0) {
+  const drivesGuia = guiaSala.drives(_drives);
+  if (drivesGuia.length === 0) {
     lista.innerHTML = criarEstadoVazioHTML('drive');
     return;
   }
@@ -2767,12 +2826,12 @@ function _iniciarCardDrive() {
       itinerario: 'drive-itinerario',
       linguagens:  'drive-linguagens',
       humanas:     'drive-humanas',
-      natureza:    'drive-natureza',
+      natureza:    'drive-natureza', integrado: 'drive-integrado',
     };
     return mapa[norm] || '';
   }
 
-  _drives.forEach(d => {
+  drivesGuia.forEach(d => {
     const classeArea = _areaParaClasseDrive(d.area);
     const nomeProf   = d.professor ? 'Prof. ' + d.professor : '—';
     const areaLabel  = d.area || '—';
@@ -3082,7 +3141,7 @@ const _htmlFormulario = `
           <div id="deslizador-container">
             <div id="deslizador-trilha"></div>
             <div id="deslizador-bola"></div>
-            <input type="range" min="0" max="4" step="1" value="0" id="deslizador" name="deslizador">
+            <input type="range" min="0" max="5" step="1" value="0" id="deslizador" name="deslizador">
           </div>
         </div>
       </li>
@@ -3105,7 +3164,7 @@ const _htmlFormulario = `
             <div class="opcao opcao-azul" onclick="document.getElementById('input-tipo-valor').value='Tarefa'"><span id="texto-opcao-tarefa">tarefas curriculares</span></div>
             <div class="opcao opcao-verde" onclick="document.getElementById('input-tipo-valor').value='Projeto'"><span id="texto-opcao-projeto">projetos disciplinares</span></div>
             <div class="opcao opcao-amarela" onclick="document.getElementById('input-tipo-valor').value='Teste'"><span id="texto-opcao-teste">simulados formativos</span></div>
-            <div class="opcao opcao-vermelha" onclick="document.getElementById('input-tipo-valor').value='Prova'"><span id="texto-opcao-prova">avaliações somativas</span></div>
+            <div class="opcao opcao-vermelha" onclick="document.getElementById('input-tipo-valor').value='Prova'"><span id="texto-opcao-prova">avaliações somativas</span></div><div class="opcao opcao-roxa" onclick="document.getElementById('input-tipo-valor').value='Evento'"><span id="texto-opcao-evento">eventos educacionais</span></div>
           </div>
         </div>
       </li>
@@ -3220,19 +3279,39 @@ function _inicializarLogicaFormulario(itemEdicao) {
     const textoMateria = document.getElementById('texto-materia');
     const deslizadorBola = document.getElementById('deslizador-bola');
     if (!deslizador) return;
-    const cores = ['var(--cor-matematica)','var(--cor-itinerario)','var(--cor-linguagens)','var(--cor-humanas)','var(--cor-natureza)'];
-    const materias = ['MATEMÁTICA','ITINERÁRIO','LINGUAGENS','HUMANAS','NATUREZA'];
+    const cores = ['var(--cor-matematica)','var(--cor-itinerario)','var(--cor-linguagens)','var(--cor-humanas)','var(--cor-natureza)','var(--cor-integrado)'];
+    const materias = ['MATEMÁTICA','ITINERÁRIO','LINGUAGENS','HUMANAS','NATUREZA','INTEGRADO'];
+    let valorAreaAnterior = null;
+    let animacaoPalavraArea = null;
+    let versaoPalavraArea = 0;
     function atualizarSeletorArea(valor) {
       const dc = document.getElementById('deslizador-container');
-      const pct = (valor / 4) * 100;
+      const pct = (valor / 5) * 100;
       deslizadorBola.style.left = (pct / 100) * (dc.offsetWidth - deslizadorBola.offsetWidth) + 'px';
       deslizadorBola.style.transform = 'translateY(-50%)';
       const cor = cores[valor];
       const trilha = document.getElementById('deslizador-trilha');
-      trilha.style.background = `rgb(${cor})`;
+      trilha.style.background = `rgb(${cor})`; if (valor !== 5 || !trilha.style.getPropertyValue("--tom-area")) { trilha.style.setProperty("--tom-area", `rgb(${cor})`); trilha.closest(".campo-area").style.setProperty("--tom-area", `rgb(${cor})`); }
       trilha.style.outline = `3.75px solid rgb(${cor})`;
-      textoMateria.textContent = materias[valor];
-      textoMateria.style.setProperty('--cor-texto-materia', `var(--cor-${['matematica','itinerario','linguagens','humanas','natureza'][valor]})`);
+      const novoTextoArea = materias[valor];
+      const anteriorArea = valorAreaAnterior;
+      valorAreaAnterior = valor;
+      const versaoArea = ++versaoPalavraArea;
+      animacaoPalavraArea?.cancel();
+      if (anteriorArea === null || anteriorArea === valor || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        textoMateria.textContent = novoTextoArea;
+      } else {
+        const sentidoArea = valor > anteriorArea ? 1 : -1;
+        animacaoPalavraArea = textoMateria.animate([{opacity:1,translate:'0px'},{opacity:0,translate:(sentidoArea*12)+'px'}], {duration:110,easing:'ease-in',fill:'forwards'});
+        animacaoPalavraArea.finished.then(() => {
+          if (versaoArea !== versaoPalavraArea) return;
+          textoMateria.textContent = novoTextoArea;
+          animacaoPalavraArea.cancel();
+          animacaoPalavraArea = textoMateria.animate([{opacity:0,translate:(-sentidoArea*12)+'px'},{opacity:1,translate:'0px'}], {duration:170,easing:'ease-out'});
+        }).catch(()=>{});
+      }
+      document.querySelector('.campo-area')?.classList.toggle('area-evento', valor === 5);
+      textoMateria.style.setProperty('--cor-texto-materia', `var(--cor-${['matematica','itinerario','linguagens','humanas','natureza','integrado'][valor]})`);
       textoMateria.style.removeProperty('background');
       textoMateria.style.removeProperty('text-shadow');
     }
@@ -3784,7 +3863,7 @@ function _inicializarLogicaFormulario(itemEdicao) {
           return;
         }
 
-        const MATERIAS_UPD = ['MATEMÁTICA','ITINERÁRIO','LINGUAGENS','HUMANAS','NATUREZA'];
+        const MATERIAS_UPD = ['MATEMÁTICA','ITINERÁRIO','LINGUAGENS','HUMANAS','NATUREZA','INTEGRADO'];
         const dadosAtualizados = {
           area:             MATERIAS_UPD[parseInt(fixos['deslizador'], 10)] || 'DESCONHECIDO',
           professor:        fixos['entrada-professor'],
@@ -3926,7 +4005,7 @@ function _inicializarLogicaFormulario(itemEdicao) {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         // Área (deslizador)
-        const MATERIAS_EDIT = ['MATEMÁTICA','ITINERÁRIO','LINGUAGENS','HUMANAS','NATUREZA'];
+        const MATERIAS_EDIT = ['MATEMÁTICA','ITINERÁRIO','LINGUAGENS','HUMANAS','NATUREZA','INTEGRADO'];
         const idxArea = MATERIAS_EDIT.findIndex(m => m === (itemEdicao.area || '').toUpperCase());
         const desl = document.getElementById('deslizador');
         if (desl && idxArea >= 0) {
@@ -3949,6 +4028,7 @@ function _inicializarLogicaFormulario(itemEdicao) {
             'Tarefa':  { texto: 'tarefas curriculares', cor: 'var(--cor-op-azul)',    corClaro: 'var(--cor-op-azul-claro)'    },
             'Projeto': { texto: 'projetos disciplinares',   cor: 'var(--cor-op-verde)',   corClaro: 'var(--cor-op-verde-claro)'   },
             'Teste':   { texto: 'simulados formativos',   cor: 'var(--cor-op-amarela)', corClaro: 'var(--cor-op-amarela-claro)' },
+            'Evento': { texto: 'eventos educacionais', cor: 'var(--cor-evento)', corClaro: 'var(--cor-evento-claro)' },
             'Prova':   { texto: 'avaliações somativas', cor: 'var(--cor-op-vermelha)',corClaro: 'var(--cor-op-vermelha-claro)'},
           };
           tipoValor.value = itemEdicao.tipo;
@@ -4079,7 +4159,7 @@ const _htmlModalDrive = (semLink = false) => `
               <div id="seletor-disciplina-container">
                 <div id="seletor-disciplina-trilha"></div>
                 <div id="seletor-disciplina-bola"></div>
-                <input type="range" min="0" max="4" step="1" value="0" id="seletor-disciplina" name="seletor-disciplina">
+                <input type="range" min="0" max="5" step="1" value="0" id="seletor-disciplina" name="seletor-disciplina">
               </div>
             </div>
           </li>
@@ -4111,8 +4191,8 @@ const _htmlModalDrive = (semLink = false) => `
    ══════════════════════════════════════════════════════════ */
 // Preenchido dinamicamente em carregarDadosProfessores() — veja Parte 1
 let NOMES_AUTORES_DRIVE = [];
-const DISCIPLINAS_DRIVE = ['MATEMÁTICA','ITINERÁRIO','LINGUAGENS','HUMANAS','NATUREZA'];
-const DISCIPLINAS_API   = ['matematica','itinerario','linguagens','humanas','natureza'];
+const DISCIPLINAS_DRIVE = ['MATEMÁTICA','ITINERÁRIO','LINGUAGENS','HUMANAS','NATUREZA','INTEGRADO'];
+const DISCIPLINAS_API   = ['matematica','itinerario','linguagens','humanas','natureza','integrado'];
 
 let _modalDriveEl = null;
 let _modalDriveItemId = null; // null = criação, número = edição
@@ -4139,31 +4219,29 @@ function _abrirModalDrive(itemEdicao, semLink = false) {
     const bola  = document.getElementById('seletor-disciplina-bola');
     const container = document.getElementById('seletor-disciplina-container');
     if (!seletor) return;
-    const cores = ['var(--cor-matematica)','var(--cor-itinerario)','var(--cor-linguagens)','var(--cor-humanas)','var(--cor-natureza)'];
+    const cores = ['var(--cor-matematica)','var(--cor-itinerario)','var(--cor-linguagens)','var(--cor-humanas)','var(--cor-natureza)','var(--cor-integrado)'];
     function atualizar(v) {
-      const pct = (v / 4) * 100;
+      const pct = (v / 5) * 100;
       bola.style.left = (pct / 100) * (container.offsetWidth - bola.offsetWidth) + 'px';
       bola.style.transform = 'translateY(-50%)';
-      const cor = cores[v];
+      const cor = cores[v]; if(v!==5)container.closest(".campo-disciplina").style.setProperty("--tom-area", `rgb(${cor})`);
       const trilha = document.getElementById('seletor-disciplina-trilha');
       trilha.style.background = `rgb(${cor})`;
       trilha.style.outline = `3.75px solid rgb(${cor})`;
-      textoDisciplina.textContent = DISCIPLINAS_DRIVE[v];
-      textoDisciplina.style.setProperty('--cor-texto-disciplina', `var(--cor-${['matematica','itinerario','linguagens','humanas','natureza'][v]})`);
+      trocarPalavraEditor(textoDisciplina, DISCIPLINAS_DRIVE[v], v); textoDisciplina.closest(".campo-disciplina").classList.toggle("disciplina-integrado",v===5);
+      textoDisciplina.style.setProperty('--cor-texto-disciplina', `var(--cor-${['matematica','itinerario','linguagens','humanas','natureza','integrado'][v]})`);
       textoDisciplina.style.removeProperty('background');
       textoDisciplina.style.removeProperty('text-shadow');
     }
     seletor.addEventListener('input', () => atualizar(parseInt(seletor.value)));
     // Defer para o layout estar pronto — offsetWidth precisa do paint
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const initVal = (itemEdicao && itemEdicao.area)
+    container.closest('.campo-disciplina').classList.add('seletor-inicializando');
+      const initVal = (itemEdicao && itemEdicao.area)
           ? (() => { const norm = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z]/g,''); return Math.max(0, DISCIPLINAS_API.indexOf(norm(itemEdicao.area))); })()
           : 0;
         seletor.value = initVal;
         atualizar(initVal);
-      });
-    });
+      requestAnimationFrame(()=>requestAnimationFrame(()=>container.closest('.campo-disciplina').classList.remove('seletor-inicializando')));
   })();
 
   // ── Autocomplete autor ────────────────────────────────
@@ -4443,7 +4521,7 @@ function _popularContadoresManuais(root) {
     tarefa: 0,
     projeto: 0,
     teste: 0,
-    prova: 0
+    prova: 0, evento: 0
   };
 
   (todosDados || []).forEach(item => {
@@ -4453,7 +4531,7 @@ function _popularContadoresManuais(root) {
     if (!item.data || !item.data.includes('/')) return;
 
     // Provas aparecem sempre; os demais tipos seguem o filtro casa/sala.
-    if (tipo !== 'prova') {
+    if (!['evento','prova'].includes(tipo)) {
       const loc = normalizarTexto(item.local);
       if (!_filtroExibicao.casa && loc === 'casa') return;
       if (!_filtroExibicao.sala && loc === 'sala') return;
@@ -4470,7 +4548,7 @@ function _popularContadoresManuais(root) {
     tarefa: 'manual-tarefa',
     projeto: 'manual-projeto',
     teste: 'manual-teste',
-    prova: 'manual-prova'
+    prova: 'manual-prova', evento: 'manual-evento'
   };
 
   Object.entries(map).forEach(([tipo, id]) => {
@@ -4511,7 +4589,7 @@ function _htmlConteudoManual(abaId) {
           <div id="manual-prova" class="manual-atividade">
             <h2 class="t-nome-tipo-manual">avaliações somativas</h2>
             <span class="quantidade-atividade"><h2 class="n-quantidade-manual"></h2></span>
-          </div>
+          </div><div id="manual-evento" class="manual-atividade"><h2 class="t-nome-tipo-manual">eventos educacionais</h2><span class="quantidade-atividade"><h2 class="n-quantidade-manual"></h2></span></div>
         </div>
       </li>`;
   }
@@ -4590,6 +4668,9 @@ function _htmlConteudoManual(abaId) {
           </button>
         </div>
       </li>
+      <li id="manual-config-li-guia">
+        <button id="botao-rever-guia" type="button" class="manual-config-rever-guia"><h2 class="manual-config-rever-guia-texto">guia</h2></button>
+      </li>
       <li id="manual-config-li-sair">
         <button id="botao-sair-sala" type="button" class="manual-config-sair-sala"><h2 id="manual-config-sair-sala-texto">sair</h2></button>
       </li>`;
@@ -4627,7 +4708,7 @@ function _vincularPreviaManual(overlay) {
     if (areaEl) areaEl.textContent = area;
 
     // Normaliza área para classe CSS
-    const areaNorm = area.toLowerCase()
+    const areaNorm = (area === 'INTEGRADO' ? 'INTEGRADO' : area).toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z]/g, '');
 
     // Tipo
@@ -4635,7 +4716,7 @@ function _vincularPreviaManual(overlay) {
     const tipoRaw = inputTipo ? inputTipo.value.trim() : '';
     const tipoNorm = tipoRaw.toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z]/g, '');
-    const tiposValidos = ['tarefa', 'projeto', 'teste', 'prova'];
+    const tiposValidos = ['tarefa', 'projeto', 'teste', 'prova', 'evento'];
     const tipoValido = tiposValidos.includes(tipoNorm) ? tipoNorm : '';
 
     if (tagEl) {
@@ -4822,7 +4903,7 @@ function abrirModalManual(abaId, aoFechar) {
                   <path d="m6 6 12 12"/>
                 </svg>
               </button>
-              <h2>manual de uso</h2>
+              <h2>funções de uso</h2>
             </li>
 
             ${_htmlConteudoManual(abaId)}
@@ -4849,6 +4930,12 @@ function abrirModalManual(abaId, aoFechar) {
 
   if (abaId === 'btn-config') {
     _inicializarControleNotificacoes(_modalManualEl);
+
+    _modalManualEl.querySelector('#botao-rever-guia')?.addEventListener('click', e => {
+      e.currentTarget.disabled = true;
+      fechar();
+      guiaSala.reabrir();
+    });
 
     const btnSairSala = _modalManualEl.querySelector('#botao-sair-sala');
     if (btnSairSala) {
@@ -4892,6 +4979,7 @@ function abrirModalManual(abaId, aoFechar) {
     }
   }
 
+  if (abaId === 'btn-calendario') vincularTiposManualExtra(_modalManualEl, () => fechar());
   const btnFechar = _modalManualEl.querySelector('#botao-fechar-manual');
 
   const fechar = () => {
@@ -4976,16 +5064,16 @@ function _abrirModalHorario(diaNum, posicao, aulaExistente) {
   const textoRebind     = document.getElementById('texto-disciplina');
   const containerRebind = document.getElementById('seletor-disciplina-container');
   if (seletorRebind && bolaRebind && trilhaRebind && textoRebind && containerRebind) {
-    const coresRebind = ['var(--cor-matematica)','var(--cor-itinerario)','var(--cor-linguagens)','var(--cor-humanas)','var(--cor-natureza)'];
+    const coresRebind = ['var(--cor-matematica)','var(--cor-itinerario)','var(--cor-linguagens)','var(--cor-humanas)','var(--cor-natureza)','var(--cor-integrado)'];
     function _atualizarSeletorHorario(v) {
-      const pct = (v / 4) * 100;
+      const pct = (v / 5) * 100;
       bolaRebind.style.left = (pct / 100) * (containerRebind.offsetWidth - bolaRebind.offsetWidth) + 'px';
       bolaRebind.style.transform = 'translateY(-50%)';
-      const cor = coresRebind[v];
+      const cor = coresRebind[v]; if(v!==5)containerRebind.closest(".campo-disciplina").style.setProperty("--tom-area", `rgb(${cor})`);
       trilhaRebind.style.background = `rgb(${cor})`;
       trilhaRebind.style.outline = `3.75px solid rgb(${cor})`;
-      textoRebind.textContent = DISCIPLINAS_DRIVE[v];
-      textoRebind.style.setProperty('--cor-texto-disciplina', `var(--cor-${['matematica','itinerario','linguagens','humanas','natureza'][v]})`);
+      trocarPalavraEditor(textoRebind, DISCIPLINAS_DRIVE[v], v); textoRebind.closest(".campo-disciplina").classList.toggle("disciplina-integrado",v===5);
+      textoRebind.style.setProperty('--cor-texto-disciplina', `var(--cor-${['matematica','itinerario','linguagens','humanas','natureza','integrado'][v]})`);
       textoRebind.style.removeProperty('background');
       textoRebind.style.removeProperty('text-shadow');
     }
@@ -4996,7 +5084,9 @@ function _abrirModalHorario(diaNum, posicao, aulaExistente) {
       const idx = DISCIPLINAS_API.indexOf(norm(aulaExistente.area));
       if (idx >= 0) seletorRebind.value = idx;
     }
-    requestAnimationFrame(() => requestAnimationFrame(() => _atualizarSeletorHorario(parseInt(seletorRebind.value))));
+    containerRebind.closest('.campo-disciplina').classList.add('seletor-inicializando');
+    _atualizarSeletorHorario(parseInt(seletorRebind.value));
+    requestAnimationFrame(()=>requestAnimationFrame(()=>containerRebind.closest('.campo-disciplina').classList.remove('seletor-inicializando')));
   }
 
   // ── Re-bind autocomplete de autor (cloneNode removeu listeners) ───────────────
@@ -5374,6 +5464,9 @@ function _garantirOverlayAcessarPlataforma() {
 
 function _exibirConfirmacaoAcessarPlataforma(link, nomeLabel) {
   _garantirOverlayAcessarPlataforma();
+  _overlayAcessarPlataforma.querySelector('.modal-confirmacao-acessar').classList.remove('confirmacao-link-atividade');
+  _overlayAcessarPlataforma.querySelector('.texto-acessar-confirmacao > h2').textContent='acessar?';
+  _garantirOverlayAcessarPlataforma();
   const sub = document.getElementById('_acessar-plataforma-subtitulo');
   if (sub) sub.textContent = nomeLabel;
   const btnConf = document.getElementById('_acessar-plataforma-confirmar');
@@ -5463,6 +5556,12 @@ function _bindHorarioEditorCliques() {
    Modal de adicionar tarefa (representante)
    ══════════════════════════════════════════════════════════ */
 function abrirModalCadastroTarefa(itemEdicao) {
+  const ordem=[...document.querySelectorAll('.nav-btn')].map(el=>el.id);
+  const sentido=ordem.indexOf('botao-navbar-adicionar')>=ordem.indexOf(ultimoPainelId)?1:-1;
+  ultimoPainelId='botao-navbar-adicionar';
+  return transicionarPainel(() => abrirModalCadastroTarefaSemTransicao(itemEdicao), true, sentido);
+}
+function abrirModalCadastroTarefaSemTransicao(itemEdicao) {
   fecharEditorCalendario();
   limparConteudo();
   conteudoTipo.innerHTML = _htmlFormulario;
@@ -5712,6 +5811,7 @@ function obterDataAtualSemHorario() {
 
 function obterPrioridadeTipoAtividade(tipo) {
   const t = normalizarTexto(tipo);
+  if (t === 'evento') return 0;
   if (t === 'prova')   return 1;
   if (t === 'teste')   return 2;
   if (t === 'projeto') return 3;
@@ -5740,7 +5840,7 @@ function atualizarCacheAtividadesProximas() {
       const t = converterDataBrParaDate(item.data).getTime();
       if (!Number.isFinite(t) || t < hoje) return false;
       // Provas têm autoridade maior: aparecem sempre, independente do filtro
-      if (normalizarTexto(item.tipo) === 'prova') return true;
+      if (['evento','prova'].includes(normalizarTexto(item.tipo))) return true;
       if (!_filtroExibicao.casa && loc === 'casa') return false;
       if (!_filtroExibicao.sala && loc === 'sala') return false;
       return true;
@@ -5750,7 +5850,8 @@ function atualizarCacheAtividadesProximas() {
 
 function criarCardAtividadeProxima(item) {
   const card = document.createElement('div');
-  const area = normalizarTexto(item.area);
+  if (item.id != null) card.dataset.itemId = String(item.id);
+  const area = (normalizarTexto(item.area) === 'integrado' ? 'integrado' : normalizarTexto(item.area));
   const tipo = normalizarTexto(item.tipo);
   const temAnexo = item.anexo && item.arquivos && item.arquivos.length > 0;
 
@@ -5832,7 +5933,7 @@ function renderizarListaAtividadesProximas() {
     lista.innerHTML = criarEstadoVazioHTML('proximas');
     return;
   }
-  proximasCasaCache.forEach(item => lista.appendChild(criarCardAtividadeProxima(item)));
+  guiaSala.priorizar(proximasCasaCache).forEach(item => lista.appendChild(criarCardAtividadeProxima(item)));
   setTimeout(() => { atualizarAlturasCardsProximos(); verificarScrollAnexosCardsProximos(); }, 30);
 }
 
@@ -5945,6 +6046,8 @@ function montarCalendario() {
   carregarDadosAtividades().then(() => {
     renderizarCalendarioComEventos();
     iniciarAnimacaoDiasMultiplos();
+    /* INÍCIO/FIM — Guia após dados carregados, inclusive em sala restaurada. */
+    guiaSala.agendar();
   });
 }
 
@@ -5995,14 +6098,14 @@ function obterClassesEAtributosDia(dia, mes, ano, _indiceAtividades) {
   const temSala = _filtroExibicao.sala && atividadesDia.some(t => normalizarTexto(t.local) === 'sala');
   // Provas têm autoridade: marcam o dia mesmo que o local delas esteja fora do filtro
   const temProvaForaFiltro = atividadesDia.some(t =>
-    normalizarTexto(t.tipo) === 'prova' &&
+    ['evento','prova'].includes(normalizarTexto(t.tipo)) &&
     ((!_filtroExibicao.casa && normalizarTexto(t.local) === 'casa') ||
      (!_filtroExibicao.sala && normalizarTexto(t.local) === 'sala'))
   );
 
   if (temCasa || temSala || temProvaForaFiltro) {
     classes.push('tem-tarefa');
-    const tiposAlvo = ['tarefa','projeto','teste','prova'];
+    const tiposAlvo = ['tarefa','projeto','teste','prova','evento'];
     const tiposPresentes = [...new Set(
       atividadesDia
         .filter(a => {
@@ -6010,7 +6113,7 @@ function obterClassesEAtributosDia(dia, mes, ano, _indiceAtividades) {
           const tipoNorm = normalizarTexto(a.tipo);
           if (!tiposAlvo.includes(tipoNorm)) return false;
           // Prova aparece sempre, outros tipos respeitam o filtro
-          if (tipoNorm === 'prova') return true;
+          if (['evento','prova'].includes(tipoNorm)) return true;
           return (_filtroExibicao.casa && loc === 'casa') || (_filtroExibicao.sala && loc === 'sala');
         })
         .map(a => normalizarTexto(a.tipo))
@@ -6094,6 +6197,15 @@ function renderizarCalendario(calendario) {
 }
 
 function renderizarCalendarioComEventos() {
+  if(!filtroTipoManualTemporario)return renderizarCalendarioSemFiltroManual();
+  const dadosOriginais=todosDados, filtroOriginal={..._filtroExibicao};
+  try {
+    todosDados=todosDados.filter(item=>normalizarTexto(item.tipo)===filtroTipoManualTemporario);
+    Object.assign(_filtroExibicao,{sala:true,casa:true});
+    renderizarCalendarioSemFiltroManual();
+  } finally { todosDados=dadosOriginais;Object.assign(_filtroExibicao,filtroOriginal); }
+}
+function renderizarCalendarioSemFiltroManual() {
   const infoMes  = obterInformacoesMesAtual();
   const ordemDias = calcularSequenciaDiasSemana(infoMes.primeiroDia);
   renderizarCabecalhoSemana(ordemDias);
@@ -6101,7 +6213,7 @@ function renderizarCalendarioComEventos() {
   elementoDataAtual.textContent = `${nomesMeses[mesAtual]} ${anoAtual}`;
 }
 
-function navegarEntreMeses(dir) {
+function navegarEntreMesesSemAnimacao(dir) {
   mesAtual += dir;
   if (mesAtual < 0)  { mesAtual = 11; anoAtual--; }
   if (mesAtual > 11) { mesAtual = 0;  anoAtual++; }
@@ -6112,8 +6224,10 @@ function navegarEntreMeses(dir) {
 // ── Painel do dia ────────────────────────────────────────
 function _escolherLocalInicial(dataStr) {
   const itensDia = todosDados.filter(item => item.data === dataStr);
-  const temProvaSala = itensDia.some(item => normalizarTexto(item.tipo) === 'prova' && normalizarTexto(item.local) === 'sala');
-  const temProvaCasa = itensDia.some(item => normalizarTexto(item.tipo) === 'prova' && normalizarTexto(item.local) === 'casa');
+  const eventoLocal=itensDia.find(item=>normalizarTexto(item.tipo)==='evento');
+  if(eventoLocal)return normalizarTexto(eventoLocal.local);
+  const temProvaSala = itensDia.some(item => ['evento','prova'].includes(normalizarTexto(item.tipo)) && normalizarTexto(item.local) === 'sala');
+  const temProvaCasa = itensDia.some(item => ['evento','prova'].includes(normalizarTexto(item.tipo)) && normalizarTexto(item.local) === 'casa');
   // Prioridade 1: local com prova (sala antes de casa se ambos tiverem)
   if (temProvaSala && !temProvaCasa) return 'sala';
   if (temProvaCasa && !temProvaSala) return 'casa';
@@ -6157,14 +6271,14 @@ function renderizarListaAtividadesDia() {
     containerAtividades.innerHTML = criarEstadoVazioHTML('atividades');
     return;
   }
-  itens.forEach(item => criarCardAtividadeDia(item));
+  guiaSala.priorizar(itens.sort(ordenarAtividadesProximas)).forEach(item => criarCardAtividadeDia(item));
   setTimeout(() => { atualizarAlturasCardsAtividade(); verificarScrollAnexosCardsDia(); }, 50);
 }
 
 // ── Cards do dia ─────────────────────────────────────────
 function criarCardAtividadeDia(item) {
   const card = document.createElement('div');
-  const area = normalizarTexto(item.area);
+  const area = (normalizarTexto(item.area) === 'integrado' ? 'integrado' : normalizarTexto(item.area));
   const tipo = normalizarTexto(item.tipo);
   const temAnexo = item.anexo && item.arquivos && item.arquivos.length > 0;
 
@@ -6431,3 +6545,1621 @@ async function abrirAnexoNoVisualizador(path) {
   const iframe = document.createElement('iframe');
   iframe.src = url; viewerFrame.appendChild(iframe);
 }
+
+/* INÍCIO — Guia de primeiro acesso por sala (sem dependências externas). */
+const guiaSala = (() => {
+  const pausa = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const buscar = seletor => document.querySelector(seletor);
+  const icone = caminho => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${caminho}"/></svg>`;
+  let atual = null;
+  let agendamento = 0;
+  const concluidasNestaPagina = new Set();
+  const versaoGuia = '2026-09-30-integrado-evento-v1';
+  const chavePrimeiroGuia = `guiaPessoaConcluido_${versaoGuia}`;
+  let pessoaConcluiuGuia = false;
+  try { pessoaConcluiuGuia = localStorage.getItem(chavePrimeiroGuia) === '1'; } catch (_) {}
+  const trocasTitulo = new WeakMap();
+  // Temporário na prévia de revisão; o build --final não ativa esta opção.
+  const permitirAnotacoes = () => document.documentElement.hasAttribute('data-guia-anotacoes');
+
+  async function trocarTituloSuavemente(titulo, texto) {
+    const anterior = trocasTitulo.get(titulo);
+    anterior?.animacao?.cancel();
+    anterior?.recorte?.cancel();
+    const sincronizarScroll = () => {
+      if(titulo.matches('.texto-detalhes')) titulo.closest('.card-atividade')?.classList.toggle('guia-detalhes-conceito', texto === 'orientações e detalhes.');
+    };
+    const troca = {texto};
+    trocasTitulo.set(titulo,troca);
+    // O nome do drive usa o fundo do próprio h2 recortado no texto.
+    // Anima essa camada inteira sem transferir o preenchimento na primeira troca.
+    let palavra = titulo.matches('.card-drive .dados-drive h2')
+      ? titulo : titulo.querySelector('.guia-palavra-titulo');
+    if (!palavra) {
+      palavra = document.createElement('span');
+      palavra.className = 'guia-palavra-titulo';
+      palavra.textContent = titulo.textContent;
+      titulo.replaceChildren(palavra);
+    }
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      palavra.textContent = texto;
+    sincronizarScroll();
+      return;
+    }
+    const animarPalavra = (frames, opcoes) => {
+      troca.recorte?.cancel();
+      const recorte=titulo.querySelector(':scope > .janela-letras');
+      if(recorte) troca.recorte=recorte.animate(frames,opcoes);
+      return palavra.animate(frames,opcoes);
+    };
+    troca.animacao = animarPalavra([
+      {opacity:1,transform:'translateY(0)'},
+      {opacity:0,transform:'translateY(-4px)'}
+    ],{duration:120,easing:'ease-in',fill:'both'});
+    await troca.animacao.finished.catch(() => {});
+    if (trocasTitulo.get(titulo) !== troca) return;
+    palavra.textContent = texto;
+    sincronizarScroll();
+    troca.animacao.cancel();
+    troca.animacao = animarPalavra([
+      {opacity:0,transform:'translateY(4px)'},
+      {opacity:1,transform:'translateY(0)'}
+    ],{duration:180,easing:'ease-out',fill:'both'});
+    await troca.animacao.finished.catch(() => {});
+    if (trocasTitulo.get(titulo) === troca) { troca.animacao.cancel(); troca.recorte?.cancel(); }
+  }
+
+  function complementarDados() {
+    if (!atual?.atividadeGuia || atual.encerrando || atual.chave !== chaveSala()) return;
+    if (!todosDados.some(item => item.id === atual.atividadeGuia.id)) todosDados.push(atual.atividadeGuia);
+  }
+
+  function sortearCampoGuia(estado, campo) {
+    const sorteio=estado.sorteiosGuia[campo];
+    if (!sorteio.fila.length) {
+      sorteio.fila=[...sorteio.opcoes];
+      for (let i=sorteio.fila.length-1;i>0;i--) {
+        const j=Math.floor(Math.random()*(i+1));
+        [sorteio.fila[i],sorteio.fila[j]]=[sorteio.fila[j],sorteio.fila[i]];
+      }
+      if (sorteio.fila.length>1 && sorteio.fila[0]===sorteio.ultimo) {
+        const j=1+Math.floor(Math.random()*(sorteio.fila.length-1));
+        [sorteio.fila[0],sorteio.fila[j]]=[sorteio.fila[j],sorteio.fila[0]];
+      }
+    }
+    return sorteio.ultimo=sorteio.fila.shift();
+  }
+
+  function criarAtividadeGuia(estado) {
+    const amanha = new Date();
+    amanha.setHours(12,0,0,0);
+    amanha.setDate(amanha.getDate()+1);
+    estado.calendarioOriginal = {mes:mesAtual,ano:anoAtual,casa:_filtroExibicao.casa};
+    const professores = [...new Set(todosDados.map(item => item.professor).filter(Boolean))];
+    estado.sorteiosGuia=Object.fromEntries(Object.entries({
+      professor:professores.length ? professores : ['Marina Costa','Rafael Lima','Clara Alves','João Silva','Beatriz Rocha'],
+      tipo:['Tarefa','Projeto','Teste','Prova','Evento'],
+      area:['MATEMÁTICA','ITINERÁRIO','LINGUAGENS','HUMANAS','NATUREZA','INTEGRADO'],
+      formato:['pdf','png','docx','pptx','xlsx']
+    }).map(([campo,opcoes])=>[campo,{opcoes,fila:[],ultimo:null}]));
+    const formato = sortearCampoGuia(estado,'formato');
+    estado.atividadeGuia = {
+      id:'guia-'+crypto.randomUUID(),sala_id:window._salaAtual.id,
+      professor:sortearCampoGuia(estado,'professor'),
+      tipo:sortearCampoGuia(estado,'tipo'),
+      area:sortearCampoGuia(estado,'area'),
+      local:'casa',data:`${String(amanha.getDate()).padStart(2,'0')}/${String(amanha.getMonth()+1).padStart(2,'0')}/${amanha.getFullYear()}`,
+      descricao_titulo:'Atividade Exemplo',
+      descricao_detalhes:'Leitura das páginas 123 a 132, capítulo 12, livro 15. Sem necessidade de entrega.',
+      anexo:true,arquivos:[`guia/exemplo.${formato}`]
+    };
+    atualizarAnexoGuia(estado,formato);
+    complementarDados();
+    mesAtual = amanha.getMonth(); anoAtual = amanha.getFullYear();
+    _filtroExibicao.casa = true;
+    renderizarCalendarioComEventos();
+    atualizarCacheAtividadesProximas();
+  }
+
+  const nomesAnexosGuia={pdf:'roteiro.pdf',png:'lista.png',docx:'termos.docx',pptx:'conteudo.pptx',xlsx:'notas.xlsx'};
+  function atualizarAnexoGuia(estado,formato) {
+    estado.atividadeGuia.arquivos=[`guia/${nomesAnexosGuia[formato]}`];
+    estado.anexoGuia=new URL(`anexos-guia/${nomesAnexosGuia[formato]}`,document.baseURI).href;
+  }
+
+  function chaveSala() {
+    const sala = window._salaAtual;
+    const identidade = [sala?.id, sala?.codigo, window._codigoSalaAtual]
+      .find(valor => valor !== undefined && valor !== null && String(valor).trim());
+    return sala && identidade !== undefined && identidade !== null && String(identidade).trim()
+      ? `guiaSalaConcluido_${versaoGuia}_${String(identidade).trim()}` : null;
+  }
+
+  function concluido(chave) {
+    try { return concluidasNestaPagina.has(chave) || localStorage.getItem(chave) === '1'; }
+    catch (_) { return concluidasNestaPagina.has(chave); }
+  }
+
+  function visivel(el) {
+    if (!el?.isConnected) return false;
+    const rect = el.getBoundingClientRect();
+    const css = getComputedStyle(el);
+    return rect.width > 0 && rect.height > 0 && css.display !== 'none' &&
+      css.visibility !== 'hidden' && Number(css.opacity) > 0.01;
+  }
+
+  // Esperas limitadas. Encerrar o guia invalida qualquer preparação pendente.
+  async function esperar(teste, estado, limite = 2600) {
+    const inicio = performance.now();
+    do {
+      if (estado && (atual !== estado || estado.chave !== chaveSala())) return null;
+      const resultado = teste();
+      if (resultado) return resultado;
+      await pausa(60);
+    } while (performance.now() - inicio < limite);
+    return null;
+  }
+
+  function modalBloqueando() {
+    return [...document.querySelectorAll('.modal-overlay, .overlay-visualizador')].some(el => {
+      const css = getComputedStyle(el);
+      return css.display !== 'none' && css.visibility !== 'hidden' && Number(css.opacity) > 0.01;
+    }) || Boolean(buscar('#formu-all'));
+  }
+
+  async function agendar() {
+    const chave = chaveSala();
+    if (!chave || concluido(chave) || atual) return;
+    const numero = ++agendamento;
+    // Também cobre a animação de fechamento do código e o destino de notificações.
+    await pausa(400);
+    const pronto = await esperar(() => numero !== agendamento || chave !== chaveSala() ||
+      (!modalBloqueando() && !_atividadeNotificacaoPendente && !_abrindoAtividadeNotificacao &&
+       visivel(buscar('#conteudo-tipo'))), null, 6000);
+    if (!pronto || numero !== agendamento || chave !== chaveSala() || atual || concluido(chave)) return;
+    iniciar(chave);
+  }
+
+  async function trocarAba(id) {
+    const botao = document.getElementById(id);
+    if (!botao) return false;
+    if (!botao.classList.contains('active')) {
+      moverParaBtn(botao);
+      atualizarNomeAba(id);
+      resetarEditorCalendario();
+      resetarEditorMaterial();
+      await renderAbaAtiva(id);
+      atualizarModoBotaoAcao(sessao ? 'admin' : 'aluno', id);
+    }
+    return true;
+  }
+
+  async function reabrir() {
+    const chave = chaveSala();
+    if (!chave || atual) return;
+    const numero = ++agendamento;
+    // Rever não apaga a conclusão anterior da sala.
+    const pronto = await esperar(() => !buscar('#modal-manual-overlay') && !modalBloqueando(), null);
+    if (!pronto || numero !== agendamento || chave !== chaveSala() || atual) return;
+    iniciar(chave);
+  }
+
+
+  function fecharDemonstracao() {
+    if (atual?.manualGuia) {
+      const manual = atual.manualGuia;
+      manual.remove();
+      if (_modalManualEl === manual) _modalManualEl = null;
+      atual.manualGuia = null;
+    }
+    if (buscar('#painel-tarefas-dia:not(.oculto)')) fecharPainelDia();
+    document.querySelectorAll('.card-material.material-aberto').forEach(el => el.classList.remove('material-aberto'));
+    buscar('.painel-material')?.classList.remove('tem-aberto');
+    _atualizarModoBotaoMaterial();
+  }
+
+  async function prepararDia(estado) {
+    const aberto = buscar('#painel-tarefas-dia:not(.oculto)');
+    if (aberto && estado.diaDemonstrado) return aberto;
+    const calendario = buscar('#container-calendario-principal');
+    if (!calendario) return null;
+    // Somente dias reais do mês exibido. Prefere anexos para a demonstração seguinte.
+    const dias = [...document.querySelectorAll('.grade-dias-mes li.tem-tarefa:not(.inativo)')];
+    const comAnexo = dias.find(dia => todosDados.some(item => item.data === dia.dataset.dataCompleta &&
+      item.anexo && item.arquivos?.length));
+    const dia = dias.find(d => d.dataset.dataCompleta === estado.atividadeGuia?.data) || comAnexo || dias[0];
+    estado.diaDemonstrado = dia?.dataset.dataCompleta || null;
+    if (!dia) return calendario;
+    const [d, m] = dia.dataset.dataCompleta.split('/').map(Number);
+    abrirPainelDia(d, m - 1, dia.dataset.dataCompleta);
+    acompanharAlvos(estado, [buscar('#painel-tarefas-dia')]);
+    const anexo = todosDados.find(item => item.data === estado.diaDemonstrado && item.anexo && item.arquivos?.length);
+    if (estado.atividadeGuia) alternarFiltroLocal('casa');
+    else if (anexo) alternarFiltroLocal(normalizarTexto(anexo.local));
+    return atual === estado ? buscar('#painel-tarefas-dia') : null;
+  }
+
+  async function prepararMaterial(id, estado) {
+    estado.driveExemploAtivo=id==='material-drive';
+    if (estado.driveExemploAtivo && !estado.driveExemplo) {
+      estado.driveExemplo={id:'guia-drive',area:sortearCampoGuia(estado,'area'),professor:sortearCampoGuia(estado,'professor'),link:''};
+    }
+    const card = buscar(`#${id}`) || await esperar(() => buscar(`#${id}`), estado);
+    if (!card) return null;
+    // Troca diretamente o card aberto, sem passar pelo estado recolhido.
+    document.querySelectorAll('.card-material.material-aberto').forEach(el => {
+      if (el !== card) el.classList.remove('material-aberto');
+    });
+    card.classList.add('material-aberto');
+    buscar('.painel-material')?.classList.add('tem-aberto');
+    acompanharAlvos(estado, [card]);
+    const painel = card.closest('.painel-material');
+    const largura = painel.getBoundingClientRect().width;
+    // O painel tem a mesma caixa final em todos os materiais. Já inicia a
+    // subida junto com a abertura, sem esperar a expansão terminar.
+    if (estado.elevacao || (window.visualViewport?.width || innerWidth) < 3*largura+48) {
+      elevarAlvo(estado, card);
+    }
+    _atualizarModoBotaoMaterial();
+    _iniciarCardDrive();
+    if (estado.drivesPainel !== painel) {
+      estado.drivesPainel = painel;
+      // Carrega durante o horário, antes da etapa do drive. Uma única leitura
+      // também evita reconstruir a lista no meio da animação de abertura.
+      estado.drivesCarregando = carregarDrives().then(() => {
+        if (atual !== estado || !card.isConnected) return;
+        _iniciarCardDrive();
+        solicitarPosicao(estado);
+      });
+    }
+    return card;
+  }
+
+  function notificacoesAtivas() {
+    return 'Notification' in window && Notification.permission === 'granted' && _estadoNotificacoesAtual === true;
+  }
+
+  async function prepararNotificacoes(estado) {
+    abrirModalManual('btn-config');
+    estado.manualGuia = buscar('#modal-manual-overlay');
+    const controle = estado.manualGuia?.querySelector('.manual-config-item.manual-config-item-notificacoes');
+    if (controle) acompanharAlvos(estado, [controle]);
+    return controle;
+  }
+
+  function textoNotificacoes() {
+    if (notificacoesAtivas()) return '<p>As notificações já estão ativadas neste dispositivo.</p>';
+    if ('Notification' in window && Notification.permission === 'denied') {
+      return '<p>As notificações estão bloqueadas. Libere-as nas configurações do navegador para receber lembretes.</p>';
+    }
+    if (!('Notification' in window) || !('PushManager' in window) || !('serviceWorker' in navigator)) {
+      return '<p>Este navegador não oferece suporte a notificações. Você pode concluir o guia normalmente.</p>';
+    }
+    return '<p>Ative as notificações para receber lembretes das atividades importantes da sua sala.</p>';
+  }
+
+  const etapas = [
+    { aba: 'btn-calendario', titulo: 'Seu calendário', alvos: ['#container-calendario-principal'], botao: '#btn-calendario',
+      texto: () => '<p>Os dias coloridos têm atividades. Selecione um deles para ver os detalhes no painel do dia.</p>' },
+    { aba: 'btn-calendario', titulo: 'As cores das atividades', alvos: ['#container-calendario-principal'],
+      texto: () => '<div class="guia-cores-manual"></div>' },
+    { aba: 'btn-calendario', titulo: 'Na sala ou em casa', preparar: async estado => {
+        const card = estado.cardDetalhesGuia;
+        if (card?.isConnected) {
+          const detalhes = card.querySelector('.card-detalhes');
+          if (detalhes) { detalhes.style.height = '0px'; detalhes.scrollTop = 0; }
+          card.classList.remove('aberto');
+        }
+        estado.cardDetalhesGuia = null;
+        const painel = await prepararDia(estado);
+        const exemplo = [...(painel?.querySelectorAll('.card-atividade') || [])].find(el => el.dataset.itemId === estado.atividadeGuia?.id);
+        const titulo = exemplo?.querySelector('.card-titulo');
+        if (titulo) {
+          estado.conviteDia = {titulo,texto:trocasTitulo.get(titulo)?.texto || titulo.textContent};
+          estado.conviteDia.inertes = [];
+          for (let el=titulo;el;el=el.parentElement) {
+            if (el.inert) { estado.conviteDia.inertes.push(el); el.inert=false; }
+          }
+          trocarTituloSuavemente(titulo,'clique aqui');
+          exemplo.classList.add('guia-convite-dia');
+        }
+        return painel;
+      },
+      texto: () => '<p>Abrimos um dia com atividades para você conhecer o painel.</p>' },
+    { aba: 'btn-calendario', titulo: 'Detalhes e anexos', preparar: async estado => {
+        const painel = await prepararDia(estado);
+        if (atual !== estado) return null;
+        if (!estado.diaDemonstrado) return painel;
+        const card = [...document.querySelectorAll('#lista-atividades-dia .card-atividade')].find(el => el.dataset.itemId === estado.atividadeGuia?.id) || buscar('#lista-atividades-dia .estado-com-anexo') || buscar('#lista-atividades-dia .card-atividade');
+        if (card) {
+          estado.cardDetalhesGuia = card;
+          const detalhes = card.querySelector('.card-detalhes');
+          card.classList.add('aberto');
+          // Mede o conteúdo expandido, não a caixa de altura zero deixada ao voltar.
+          let altura = 0;
+          if (detalhes) {
+            const anterior = detalhes.style.height;
+            const transicao = detalhes.style.transition;
+            detalhes.style.transition = 'none';
+            detalhes.style.height = 'auto';
+            altura = Math.min(detalhes.scrollHeight, _vhFixoEmPx(15) * 2.25);
+            detalhes.style.height = anterior;
+            void detalhes.offsetHeight;
+            detalhes.style.transition = transicao;
+          }
+          acompanharAlvos(estado, [card]);
+          card.style.setProperty('--detalhes-height', `${altura}px`);
+          if (detalhes) detalhes.style.height = `${altura}px`;
+        }
+        return card || painel;
+      }, texto: () => '<p>Clique no título para abrir ou fechar. Se houver anexos, abra-os pelo próprio card.</p>' },
+    { aba: 'bnt-proximo', titulo: 'Atividades próximas', alvos: ['#painel-atividades-proximas'], botao: '#bnt-proximo',
+      texto: () => '<p>A lista reúne atividades a partir de hoje, com as datas mais próximas primeiro.</p><p>Na mesma data: <strong>Evento → Prova → Teste → Projeto → Tarefa.</strong> Se ainda houver empate, vale o título em ordem alfabética.</p>' },
+    { aba: 'btn-material', titulo: 'Carga horária', preparar: estado => prepararMaterial('material-horario', estado),
+      texto: () => '<p>Confira a sequência de aulas de cada dia útil, com a aula e o professor correspondente.</p>' },
+    { aba: 'btn-material', titulo: 'Drives e pastas', preparar: estado => prepararMaterial('material-drive', estado),
+      texto: () => '<p>Já agora temos os drives acadêmicos disponibilizados pelos professores, ficando separados por área ou disciplina.</p>' },
+    { aba: 'btn-material', titulo: 'Plataformas de acesso', preparar: estado => prepararMaterial('material-plataformas', estado),
+      texto: () => '<p>Aqui estão acessos como o <strong>Portal SESI Educação</strong> e o <strong>Portal do Estudante</strong>.</p><p>Ao selecionar uma plataforma, uma confirmação aparece antes de abrir o site.</p>' },
+    { aba: 'btn-config', titulo: 'Escolha o que aparece', alvos: ['.tema-container-exibicao'], botao: '#btn-config',
+      texto: () => '<p>Sala e casa controlam o calendário. Você pode manter as duas opções ou apenas uma. Atividades de alto valor continuam aparecendo, mesmo com seu local desativado.</p>' },
+    { aba: 'btn-config', titulo: 'Do seu jeito', alvos: ['.tema-container-aparencia'],
+      texto: () => '<p>Os controles superiores mudam o estilo visual da interface.</p><p>Na paleta, escolha a cor principal do Quadro Digital. Suas preferências são mantidas durante o seu uso. Tente alterar agora!</p>' },
+    { aba: 'btn-config', titulo: 'Receba lembretes', preparar: prepararNotificacoes, manualNotificacoes: true,
+      texto: () => '<p>Ative as notificações para receber lembretes das atividades importantes da sua sala.</p>' },
+    { titulo: 'Tudo pronto!', final: true, texto: estado => '<p>Tudo pronto! Agora você já pode usar o Quadro Digital.</p>' + (estado.aviso ? `<p class="guia-aviso">${estado.aviso}</p>` : '') }
+  ];
+
+  // Destaque por recorte: o conteúdo visto é sempre o nó original do site.
+  // Não há clone, screenshot, portal, dialog ou remontagem do elemento em foco.
+  function restaurarDestaques(estado) {
+    estado.molduras.forEach(el => el.remove());
+    estado.molduras = [];
+  }
+
+  function contornoArredondado(el, r) {
+    const css = getComputedStyle(el);
+    const sx = r.width / (el.offsetWidth || r.width), sy = r.height / (el.offsetHeight || r.height);
+    const raio = prop => {
+      const valores = css[prop].split(' ');
+      const px = (valor, base) => valor.endsWith('%') ? parseFloat(valor) / 100 * base : parseFloat(valor) || 0;
+      return [Math.min(r.width / 2, px(valores[0], el.offsetWidth) * sx),
+        Math.min(r.height / 2, px(valores[1] || valores[0], el.offsetHeight) * sy)];
+    };
+    const [tl, tr, br, bl] = ['borderTopLeftRadius','borderTopRightRadius','borderBottomRightRadius','borderBottomLeftRadius'].map(raio);
+    const {left:x, top:y, right:b, bottom:d} = r;
+    const arco = (raios, dx, dy) => raios[0] && raios[1] ? `A${raios[0]} ${raios[1]} 0 0 1 ${dx} ${dy}` : `L${dx} ${dy}`;
+    return { caminho: `M${x+tl[0]} ${y}H${b-tr[0]}${arco(tr,b,y+tr[1])}V${d-br[1]}${arco(br,b-br[0],d)}H${x+bl[0]}${arco(bl,x,d-bl[1])}V${y+tl[1]}${arco(tl,x+tl[0],y)}Z`,
+      raio: `${tl[0]}px ${tr[0]}px ${br[0]}px ${bl[0]}px / ${tl[1]}px ${tr[1]}px ${br[1]}px ${bl[1]}px` };
+  }
+
+  // A elevação usa uma animação aditiva: não altera os estilos originais.
+  function margemSuperiorGuia() {
+    const escala = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--escala-altura-interface')) || 1;
+    return (window.visualViewport?.offsetTop || 0) + 35.5*(.8+.2*escala);
+  }
+
+  function restaurarCamadas(estado) {
+    estado.camadas?.forEach(animacao => animacao.cancel());
+    estado.camadas = [];
+    estado.recortesTopo?.forEach(recorte => recorte.animacao?.cancel());
+    estado.recortesTopo = new Map();
+  }
+
+  function destacarCamadas(estado) {
+    restaurarCamadas(estado);
+    const elementos = new Set();
+    // Eleva também os contextos ancestrais, sem remontar ou duplicar o item.
+    estado.fontes.forEach(fonte => {
+      for (let el=fonte; el && el!==document.body; el=el.parentElement) {
+        const css=getComputedStyle(el);
+        if (css.position!=='static' || css.transform!=='none' || css.isolation==='isolate') elementos.add(el);
+      }
+    });
+    elementos.forEach(el => estado.camadas.push(el.animate(
+      [{zIndex:'2147483645'},{zIndex:'2147483645'}],{duration:1,fill:'both'}
+    )));
+    estado.fontes.filter(el=>el.matches('.nav-btn')).forEach(botao=>{
+      const wrapper=botao.closest('.navbar-wrapper');
+      if (!wrapper) return;
+      for(let el=botao;el && el!==document.body;el=el.parentElement) {
+        estado.camadas.push(el.animate([{zIndex:'2147483647'},{zIndex:'2147483647'}],{duration:1,fill:'both'}));
+        if(el===wrapper) break;
+        // Os outros ramos da navbar continuam desfocados na camada elevada.
+        [...el.parentElement.children].filter(irmao=>irmao!==el && !irmao.matches('.indicator')).forEach(irmao=>{
+          estado.camadas.push(irmao.animate([{filter:'blur(5px) brightness(.78)'},{filter:'blur(5px) brightness(.78)'}],{duration:1,fill:'both'}));
+        });
+      }
+    });
+  }
+
+  async function restaurarElevacao(estado, suave = true) {
+    const elevacao = estado.elevacao;
+    if (!elevacao) return;
+    estado.elevacao = null;
+    const progresso = elevacao.animacao.effect.getComputedTiming().progress || 0;
+    const deslocamento = elevacao.inicio + (elevacao.destino-elevacao.inicio)*progresso;
+    elevacao.animacao.cancel();
+    estado.fontes = estado.fontesCompletas || estado.fontes;
+    if (!suave || !elevacao.elemento.isConnected || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const volta = elevacao.elemento.animate([
+      {translate:'0 ' + deslocamento + 'px'}, {translate:'0 0px'}
+    ], {duration:220,easing:'cubic-bezier(.4,0,.2,1)',composite:'add'});
+    await volta.finished.catch(() => {});
+    volta.cancel();
+  }
+
+  function elevarAlvo(estado, principal) {
+    const anterior = estado.elevacao;
+    if (anterior?.animacao.playState === 'running') return;
+    const elemento = anterior?.elemento || principal.closest(
+      '.painel-lateral-dia, .container-painel, .painel-material, .container-configurar, .painel-atividades-proximas'
+    ) || principal;
+    const pai = elemento.parentElement;
+    const escalaPai = pai?.offsetHeight ? pai.getBoundingClientRect().height/pai.offsetHeight : 1;
+    const fator = escalaPai > 0 ? escalaPai : 1;
+    const atualY = anterior?.destino || 0;
+    const baseSuperior = elemento.getBoundingClientRect().top-atualY*fator;
+    const topoTela = margemSuperiorGuia();
+    const subidaMaxima = Math.max(0,baseSuperior-topoTela);
+    // Quando necessário, sobe até a margem superior; nunca para no meio.
+    const destino = -subidaMaxima/fator;
+    if (anterior && Math.abs(destino-atualY)<.5) return;
+    anterior?.animacao.cancel();
+    const animacao = elemento.animate([
+      {translate:'0 ' + atualY + 'px'}, {translate:'0 ' + destino + 'px'}
+    ], {duration:matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 220,
+      easing:'cubic-bezier(.4,0,.2,1)',fill:'both',composite:'add'});
+    estado.elevacao = {elemento,animacao,inicio:atualY,destino};
+    if (!anterior) estado.fontesCompletas = [...estado.fontes];
+    // Nesta situação, o foco permanece no conteúdo; a navegação fica sob o fundo.
+    estado.fontes = [principal];
+    solicitarPosicao(estado);
+  }
+
+  function faixaDia(estado) {
+    if (estado.indice !== 2) return null;
+    const painel = estado.fontes.find(el => el?.matches('.painel-lateral-dia'));
+    const lista = painel?.querySelector('#lista-atividades-dia');
+    if (!lista || !visivel(painel)) return null;
+    const r = painel.getBoundingClientRect(), l = lista.getBoundingClientRect();
+    const meio = Math.max(r.top, Math.min(r.bottom, (l.top + Math.min(l.bottom,r.bottom))/2));
+    return {painel,r,meio};
+  }
+
+  function areaProtegida(estado, el) {
+    const faixa = faixaDia(estado), r = el.getBoundingClientRect();
+    return faixa?.painel === el ? {left:r.left,right:r.right,top:r.top,bottom:faixa.meio,width:r.width} : r;
+  }
+
+  function posicionar(estado) {
+    if (atual !== estado || estado.preparando || estado.reajustandoElevacao) return;
+    const vv = window.visualViewport;
+    const w = vv?.width || innerWidth, h = vv?.height || innerHeight;
+    const ox = vv?.offsetLeft || 0, oy = vv?.offsetTop || 0;
+    const margem = 10, margemVertical = margemSuperiorGuia()-oy, gap = 14, cartao = estado.cartao;
+    const areaAtual = [w,h,ox,oy].join(':');
+    if (estado.elevacao && estado.areaElevacao !== areaAtual) {
+      estado.reajustandoElevacao = true;
+      cartao.style.visibility = 'hidden';
+      restaurarElevacao(estado).then(() => {
+        estado.reajustandoElevacao = false;
+        if (atual === estado) { estado.cartaoPendente = true; solicitarPosicao(estado); }
+      });
+      return;
+    }
+    estado.areaElevacao = areaAtual;
+    const escala = parseFloat(getComputedStyle(cartao).scale) || 1;
+    const texto = cartao.querySelector('.guia-texto');
+    texto.classList.remove('guia-rolagem-curta');
+    cartao.classList.remove('guia-compacto','guia-minimo','guia-espaco-curto');
+    const escalaSite = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--escala-altura-interface')) || 1;
+    // A largura visível acompanha os painéis de 350px, sem alterar fonte ou escala do modal.
+    cartao.style.width = Math.min(350*escalaSite,w-2*margem)/escala + 'px';
+    // Apenas o limite físico da janela pode exigir rolagem, nunca o espaço do alvo.
+    cartao.style.maxHeight = (h-2*margemVertical)/escala + 'px';
+    // Mede o layout final, sem incluir a escala da animação de surgimento.
+    const largura = cartao.offsetWidth*escala, altura = cartao.offsetHeight*escala;
+    const fontes = estado.fontes.filter(visivel);
+    const retangulos = fontes.map(el => areaProtegida(estado,el));
+    const alvo = retangulos[0];
+    const limites = {left:ox+margem,top:oy+margemVertical,right:ox+w-margem,bottom:oy+h-margemVertical};
+    const abrirEspacoAbaixo = () => {
+      const elemento = estado.elevacao?.elemento || fontes[0].closest(
+        '.painel-lateral-dia, .container-painel, .painel-material, .container-configurar, .painel-atividades-proximas'
+      ) || fontes[0];
+      // Espaço real após subir o painel até a margem, sem cortar sua parte superior.
+      const trechoAteAlvo = alvo.bottom-elemento.getBoundingClientRect().top;
+      const disponivel = Math.max(0,limites.bottom-margemSuperiorGuia()-trechoAteAlvo-gap);
+      cartao.classList.toggle('guia-espaco-curto',disponivel < 210*escala);
+      cartao.style.maxHeight = Math.min(altura,disponivel)/escala+'px';
+      const alturaFinal = cartao.offsetHeight*escala;
+      const y = limites.bottom-alturaFinal;
+      elevarAlvo(estado,fontes[0]);
+      return y;
+    };
+    let cx, cy;
+    const faixa = faixaDia(estado);
+    if (faixa) {
+      // A explicação pode ocupar a metade suavizada, sem deslocar o painel.
+      const topo = Math.max(limites.top,faixa.meio+gap);
+      const disponivel = Math.max(0,limites.bottom-topo);
+      cartao.classList.toggle('guia-espaco-curto',disponivel < 210*escala);
+      cartao.style.maxHeight = disponivel/escala+'px';
+      cx = Math.max(limites.left,Math.min(limites.right-largura,faixa.r.left+(faixa.r.width-largura)/2));
+      cy = Math.max(topo,limites.bottom-cartao.offsetHeight*escala);
+    } else if (estado.elevacao) {
+      cy = abrirEspacoAbaixo();
+      cx = limites.left+(w-2*margem-largura)/2;
+    } else {
+      const xs = [limites.left,limites.right], ys = [limites.top,limites.bottom];
+      const limitar = (n,min,max) => Math.max(min,Math.min(max,n));
+      retangulos.forEach(r => {
+        xs.push(limitar(r.left-gap,limites.left,limites.right),limitar(r.right+gap,limites.left,limites.right));
+        ys.push(limitar(r.top-gap,limites.top,limites.bottom),limitar(r.bottom+gap,limites.top,limites.bottom));
+      });
+      const espacos = [];
+      for (const left of xs) for (const right of xs) for (const top of ys) for (const bottom of ys) {
+        if (right-left < largura-.05 || bottom-top < altura-.05) continue;
+        if (retangulos.some(r => left<r.right+gap && right>r.left-gap && top<r.bottom+gap && bottom>r.top-gap)) continue;
+        const lado = !alvo ? 'centro' : left>=alvo.right ? 'direita' : right<=alvo.left ? 'esquerda' : top>=alvo.bottom ? 'baixo' : 'cima';
+        espacos.push({left,right,top,bottom,lado});
+      }
+      espacos.sort((a,b) => Number(b.lado===estado.ladoCartao)-Number(a.lado===estado.ladoCartao));
+      const e = espacos[0];
+      if (!e && alvo) {
+        cy = abrirEspacoAbaixo();
+        cx = limites.left+(w-2*margem-largura)/2;
+      } else {
+        const area = e || limites;
+        cx = alvo ? limitar(alvo.left+(alvo.width-largura)/2,area.left,area.right-largura) : area.left+(area.right-area.left-largura)/2;
+        cy = alvo ? limitar(alvo.top,area.top,area.bottom-altura) : area.top+(area.bottom-area.top-altura)/2;
+        if(e?.lado==='direita') cx=e.left;
+        if(e?.lado==='esquerda') cx=e.right-largura;
+        if(e?.lado==='baixo') cy=e.top;
+        if(e?.lado==='cima') cy=e.bottom-altura;
+        const antiga = estado.posicaoCartao;
+        if(antiga?.alvo===fontes[0] && antiga.lado===e?.lado && antiga.x>=area.left && antiga.x+largura<=area.right && antiga.y>=area.top && antiga.y+altura<=area.bottom) {
+          cx=antiga.x; cy=antiga.y;
+        }
+        estado.ladoCartao=e?.lado;
+      }
+    }
+    estado.posicaoCartao={x:cx,y:cy,alvo:fontes[0],lado:estado.ladoCartao};
+    // Mantém ao menos uma linha inteira legível dentro da área rolável curta.
+    texto.classList.toggle('guia-rolagem-curta',texto.clientHeight < 70 && texto.scrollHeight > texto.clientHeight);
+    // A explicação aparece quando o item já liberou sua área de leitura.
+    Object.assign(cartao.style,{left:cx+'px',top:cy+'px',visibility:estado.elevacao?.animacao.playState==='running' ? 'hidden' : 'visible'});
+    estado.cartaoPendente = Boolean(estado.elevacao?.animacao.playState==='running');
+    if (!estado.cartaoPendente && estado.animarEntrada) {
+      estado.animarEntrada = false;
+      animarModalGuia(estado, true);
+    }
+    if (estado.focarCartao && !estado.cartaoPendente) {
+      estado.focarCartao=false;
+      cartao.querySelector('.guia-titulo').focus({preventScroll:true});
+    }
+  }
+
+  function animarModalGuia(estado, entrar) {
+    const c = estado.cartao;
+    estado.animacoesSetas?.forEach(a=>a.cancel());
+    estado.animacoesSetas=[...c.querySelectorAll('.guia-navegacao svg')].map(svg=>svg.animate(
+      entrar ? [{opacity:0,translate:'0 2px'},{opacity:1,translate:'0 0'}] : [{opacity:1,translate:'0 0'},{opacity:0,translate:'0 -2px'}],
+      {duration:matchMedia('(prefers-reduced-motion: reduce)').matches?0:140,easing:'ease-in-out',fill:'both'}
+    ));
+    if (!entrar) estado.animacaoVisto?.cancel();
+    const css = getComputedStyle(c);
+    const inicio = {transform:css.transform,opacity:css.opacity};
+    estado.animacaoModal?.cancel();
+    const pequeno = {transform:`translate(${c.offsetWidth*.04}px, ${c.offsetHeight*.04}px) scale(.92)`,opacity:0};
+    const normal = {transform:'translate(0px, 0px) scale(1)',opacity:1};
+    const animacao = c.animate(entrar ? [pequeno,normal] : [inicio,pequeno], {
+      duration:matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : entrar ? 350 : 250,
+      easing:entrar ? 'cubic-bezier(.34,1.45,.64,1)' : 'cubic-bezier(.4,0,.2,1)',fill:'both'
+    });
+    estado.animacaoModal = animacao;
+    if (entrar && etapas[estado.indice]?.final) {
+      animacao.finished.then(() => {
+        if (atual !== estado || estado.encerrando || estado.preparando || estado.animacaoModal !== animacao) return;
+        estado.animacaoVisto?.cancel();
+        const reduzir = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        estado.animacaoVisto = c.querySelector('.guia-proximo path').animate([
+          {d:'path("M9 18 L15 12 L9 6")'}, {d:'path("M5 12 L10 17 L20 6")'}
+        ], {duration:reduzir ? 0 : 450,delay:reduzir ? 0 : 200,easing:'cubic-bezier(.4,0,.2,1)',fill:'both'});
+      }).catch(() => {});
+    }
+    return animacao.finished.catch(() => {});
+  }
+
+  function atualizarRecorte(estado) {
+    const faixa = faixaDia(estado);
+    if (faixa) {
+      if (!estado.blurDia) {
+        estado.blurDia = document.createElement('div');
+        estado.blurDia.className = 'guia-dia-gradiente';
+        estado.blurDia.setAttribute('aria-hidden','true');
+        estado.dialogo.insertBefore(estado.blurDia,estado.cartao);
+      }
+      const {r,meio,painel} = faixa;
+      Object.assign(estado.blurDia.style,{display:'block',left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px',borderRadius:contornoArredondado(painel,r).raio});
+      estado.blurDia.style.setProperty('--inicio-blur',Math.max(0,meio-r.top-24)+'px');
+      estado.blurDia.style.setProperty('--fim-blur',Math.min(r.height,meio-r.top+64)+'px');
+    } else if (estado.blurDia) estado.blurDia.style.display = 'none';
+    const fontes = estado.fontes.filter(visivel);
+    const formas = fontes.map(el => {
+      const r = el.getBoundingClientRect();
+      const navbar=el.matches('#btn-calendario, #bnt-proximo, #btn-material, #btn-config');
+      return { r, navbar, contorno: contornoArredondado(el, r) };
+    });
+    // Os painéis originais são translúcidos: z-index sozinho não esconde o
+    // cabeçalho atrás deles. Recorta apenas o trecho coberto, sem mudar o alvo.
+    estado.recortesTopo ||= new Map();
+    for (const titulo of document.querySelectorAll('.topo-geral, #botao-acao-topo')) {
+      const recorte = estado.recortesTopo.get(titulo) || {};
+      estado.recortesTopo.set(titulo, recorte);
+      const t = titulo.getBoundingClientRect();
+      const sx = t.width / (titulo.offsetWidth || t.width);
+      const sy = t.height / (titulo.offsetHeight || t.height);
+      let caminhoTitulo = 'M-10000 -10000H10000V10000H-10000Z';
+      let coberto = titulo.matches('#botao-acao-topo') && [4,5,6,7].includes(estado.indice);
+      const margemTopo = titulo.matches('#botao-acao-topo') ? 24 : 0;
+      formas.forEach(({r}) => {
+        if (r.left < t.right+margemTopo && r.right > t.left-margemTopo && r.top < t.bottom+margemTopo && r.bottom > t.top-margemTopo) {
+          const x = (r.left-t.left-6)/sx, y = (r.top-t.top-6)/sy;
+          const right = (r.right-t.left+6)/sx, bottom = (r.bottom-t.top+6)/sy;
+          caminhoTitulo += `M${x} ${y}H${right}V${bottom}H${x}Z`;
+          coberto = true;
+        }
+      });
+      if (!coberto) {
+        recorte.animacao?.cancel();
+        recorte.animacao = null;
+        recorte.caminho = null;
+      } else if (recorte.caminho !== caminhoTitulo) {
+        const frames = titulo.matches('#botao-acao-topo')
+          ? [{opacity:0},{opacity:0}]
+          : [{clipPath:`path(evenodd, "${caminhoTitulo}")`},{clipPath:`path(evenodd, "${caminhoTitulo}")`}];
+        if (recorte.animacao) recorte.animacao.effect.setKeyframes(frames);
+        else recorte.animacao = titulo.animate(frames,{duration:1,fill:'both'});
+        recorte.caminho = caminhoTitulo;
+      }
+    }
+    let caminho = `M0 0H${innerWidth}V${innerHeight}H0Z`;
+    formas.forEach(({contorno,navbar}) => { if(!navbar) caminho += contorno.caminho; });
+    if (estado.ultimoRecorte === caminho) return false;
+    estado.ultimoRecorte = caminho;
+    formas.forEach(({r, contorno, navbar}, i) => {
+      let moldura = estado.molduras[i];
+      if (!moldura) {
+        moldura = document.createElement('div');
+        moldura.className = 'guia-destaque';
+        moldura.setAttribute('aria-hidden','true');
+        estado.dialogo.insertBefore(moldura,estado.cartao);
+        estado.molduras.push(moldura);
+      }
+      Object.assign(moldura.style,{left:`${r.left}px`,top:`${r.top}px`,width:`${r.width}px`,height:`${r.height}px`,borderRadius:contorno.raio});
+      moldura.style.display=navbar ? 'none' : '';
+    });
+    while (estado.molduras.length > formas.length) estado.molduras.pop().remove();
+    // Caminho vetorial direto: dispensa criar/decodificar uma imagem SVG por quadro.
+    estado.fundo.style.clipPath = `path(evenodd, "${caminho}")`;
+    return true;
+  }
+
+  function acompanharAlvos(estado, fontes) {
+    if (atual !== estado) return;
+    estado.fontes = fontes.filter(Boolean);
+    destacarCamadas(estado);
+    estado.ultimoRecorte = null;
+    atualizarRecorte(estado);
+    solicitarPosicao(estado);
+  }
+
+  function atualizarDestaques(estado) {
+    atualizarRecorte(estado);
+    estado.cartaoPendente = true;
+    solicitarPosicao(estado);
+  }
+
+  function solicitarPosicao(estado) {
+    if (atual !== estado || estado.encerrando) return;
+    estado.acompanharAte = performance.now() + 1800;
+    if (estado.frame) return;
+    // ResizeObserver não acompanha transformações; segue a geometria real
+    // durante a transição e para sozinho quando a janela de movimento termina.
+    const acompanhar = () => {
+      estado.frame = 0;
+      if (atual !== estado) return;
+      if (estado.chave !== chaveSala()) { encerrar(false, false); return; }
+      atualizarRecorte(estado);
+      // O blur acompanha cada quadro. A explicação só é posicionada quando
+      // a geometria para, sem perseguir os tamanhos intermediários da animação.
+      const geometria = [innerWidth,innerHeight,window.visualViewport?.width,
+        window.visualViewport?.height,window.visualViewport?.offsetLeft,window.visualViewport?.offsetTop,
+        ...estado.fontes.filter(visivel).flatMap(el => {
+          const r = el.getBoundingClientRect();
+          return [r.x,r.y,r.width,r.height].map(n => Math.round(n*2)/2);
+        })].join(':');
+      const agora = performance.now();
+      if (geometria !== estado.geometriaCartao) {
+        estado.geometriaCartao = geometria;
+        estado.geometriaMudouEm = agora;
+        estado.cartaoPendente = true;
+      }
+      // Conteúdo assíncrono pode crescer depois da primeira medição. Nunca
+      // deixa uma explicação visível sobre o alvo durante esse crescimento.
+      const r = estado.cartao.getBoundingClientRect();
+      const colisao = estado.fontes.filter(visivel).some(el => {
+        const t = areaProtegida(estado,el);
+        return r.left < t.right+10 && r.right > t.left-10 && r.top < t.bottom+10 && r.bottom > t.top-10;
+      });
+      if (colisao) {
+        estado.cartao.style.visibility = 'hidden';
+        estado.cartaoPendente = true;
+      }
+      if (!estado.preparando && estado.cartaoPendente && agora-estado.geometriaMudouEm >= 32) posicionar(estado);
+      if (performance.now() < estado.acompanharAte || (!estado.preparando && estado.cartaoPendente)) estado.frame = requestAnimationFrame(acompanhar);
+    };
+    estado.frame = requestAnimationFrame(acompanhar);
+  }
+
+  function pararCores(estado) {
+    clearTimeout(estado.timerCores);
+    if (estado.bolaCalendarioGuia) {
+      const {el,classes,indice}=estado.bolaCalendarioGuia;
+      el.className=classes;
+      if (indice===undefined) delete el.dataset.indiceCor;
+      else el.dataset.indiceCor=indice;
+      estado.bolaCalendarioGuia=null;
+    }
+    estado.cicloCores = null;
+    estado.animacoesCores?.forEach(a => a.cancel());
+    estado.animacoesCores = [];
+  }
+
+  function iniciarCores(estado) {
+    const host = estado.cartao.querySelector('.guia-cores-manual');
+    if (!host) return;
+    const template = document.createElement('template');
+    template.innerHTML = _htmlConteudoManual('btn-calendario');
+    host.append(template.content.querySelector('.painel-manual-calendario'));
+    _popularContadoresManuais(host);
+    const itens = [...host.querySelectorAll('.manual-atividade')];
+    let indice = 0;
+    let quantidade = 0;
+    let bolaNaEsquerda = false;
+    const dia=[...document.querySelectorAll('.grade-dias-mes li:not(.inativo)')]
+      .find(el=>el.dataset.dataCompleta===estado.atividadeGuia?.data);
+    if (dia) {
+      estado.bolaCalendarioGuia={el:dia,classes:dia.className,indice:dia.dataset.indiceCor};
+      dia.classList.remove('dia-com-multiplos-tipos');
+    }
+    const reduzir = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const ciclo = {};
+    estado.cicloCores = ciclo;
+    const exibir = () => {
+      itens.forEach((item,i) => {
+        item.hidden = i !== indice;
+        item.style.flexDirection = bolaNaEsquerda ? 'row-reverse' : 'row';
+        item.querySelector('.n-quantidade-manual').textContent=String(quantidade);
+      });
+      if (dia) {
+        const tipos=itens.map(item=>item.id.replace('manual-',''));
+        dia.classList.remove(...tipos.map(tipo=>'dia-'+tipo));
+        dia.classList.add('dia-'+tipos[indice%tipos.length]);
+      }
+    };
+    const agendar = () => { estado.timerCores = setTimeout(trocar,1200); };
+    const animar = async (el,frames) => {
+      const a = el.animate(frames,{duration:reduzir ? 0 : 360,easing:'cubic-bezier(.4,0,.2,1)',fill:'both'});
+      estado.animacoesCores.push(a);
+      await a.finished.catch(() => {});
+    };
+    const trocar = async () => {
+      if (estado.cicloCores !== ciclo) return;
+      const item = itens[indice], bola = item.querySelector('.quantidade-atividade');
+      const nome = item.querySelector('.t-nome-tipo-manual');
+      const percurso = Math.max(0,item.getBoundingClientRect().width /
+        (estado.cartao.getBoundingClientRect().width / estado.cartao.offsetWidth) -
+        bola.offsetWidth-2*parseFloat(getComputedStyle(item).paddingLeft));
+      const numero = bola.querySelector('.n-quantidade-manual');
+      const sombraAnterior = getComputedStyle(bola).boxShadow;
+      const fundoAnterior = getComputedStyle(item).boxShadow;
+      await Promise.all([
+        // translate independente não é encurtado pela escala .925 do hover.
+        animar(bola,[{translate:'0px'},{translate:`${bolaNaEsquerda ? percurso : -percurso}px`}]),
+        animar(numero,[{opacity:1,transform:'translateY(0)'},{opacity:0,transform:'translateY(-7px)'}]),
+        animar(nome,[{opacity:1,transform:'translateX(0)'},{opacity:0,transform:'translateX(-12px)'}])
+      ]);
+      if (estado.cicloCores !== ciclo) return;
+      estado.animacoesCores.forEach(a => a.cancel()); estado.animacoesCores = [];
+      indice = (indice+1)%itens.length;
+      quantidade = (quantidade+1)%10;
+      bolaNaEsquerda = !bolaNaEsquerda;
+      exibir();
+      const proximo = itens[indice];
+      const novaBola = proximo.querySelector('.quantidade-atividade');
+      await Promise.all([
+        animar(novaBola,[{boxShadow:sombraAnterior},{boxShadow:getComputedStyle(novaBola).boxShadow}]),
+        animar(proximo,[{boxShadow:fundoAnterior},{boxShadow:getComputedStyle(proximo).boxShadow}]),
+        animar(novaBola.querySelector('.n-quantidade-manual'),[{opacity:0,transform:'translateY(7px)'},{opacity:1,transform:'translateY(0)'}]),
+        animar(proximo.querySelector('.t-nome-tipo-manual'),[{opacity:0,transform:'translateX(12px)'},{opacity:1,transform:'translateX(0)'}])
+      ]);
+      if (estado.cicloCores !== ciclo) return;
+      estado.animacoesCores.forEach(a => a.cancel()); estado.animacoesCores = [];
+      agendar();
+    };
+    exibir(); agendar();
+  }
+
+  function pararRotulos(estado) {
+    clearTimeout(estado.timerRotulos);
+    clearTimeout(estado.timerAguardarRotulos);
+    estado.cardRotulos?.classList.remove('guia-cores-sincronizadas','guia-detalhes-conceito');
+    estado.cardRotulos=null;
+    estado.rotulosGuia?.forEach(({el,original}) => trocarTituloSuavemente(el,original));
+    estado.rotulosGuia=null;
+  }
+
+  function iniciarRotulos(estado) {
+    if (etapas[estado.indice]?.titulo==='Drives e pastas') {
+      iniciarRotulosDrive(estado);
+      return;
+    }
+    if (![2,3,4].includes(estado.indice)) return;
+    const proximas=estado.indice===4;
+    const card=proximas
+      ? [...document.querySelectorAll('#painel-atividades-proximas .card-atividade')].find(el=>el.dataset.itemId===estado.atividadeGuia?.id)
+      : estado.indice===2 ? estado.conviteDia?.titulo.closest('.card-atividade') : estado.cardDetalhesGuia;
+    if (!card) {
+      if (proximas) estado.timerAguardarRotulos=setTimeout(() => {
+        if (atual===estado && !estado.preparando && !estado.encerrando) iniciarRotulos(estado);
+      },100);
+      return;
+    }
+    estado.cardRotulos=card;
+    card.classList.add('guia-cores-sincronizadas');
+    estado.rotulosGuia=[['.card-materia','CONHECIMENTO'],['.tag-tipo',proximas ? 'Data' : 'Tipo'],['.card-titulo','título'],['.card-prof','Aplicador'],['.nome-arquivo-anexo','arquivo'],['.texto-detalhes','orientações e detalhes.']]
+      .filter(([seletor]) => estado.indice !== 2 || seletor !== '.card-titulo')
+      .filter(([seletor]) => estado.indice === 3 || seletor !== '.texto-detalhes')
+      .map(([seletor,rotulo]) => {
+        const el=card.querySelector(seletor);
+        if (!el) return null;
+        const original=trocasTitulo.get(el)?.texto || el.textContent;
+        const texto=original;
+        return {el,seletor,rotulo,texto,original};
+      }).filter(Boolean);
+    let mostrarRotulo=false;
+    const oscilar = () => {
+      if (atual!==estado || estado.preparando || estado.encerrando || estado.cardRotulos!==card) return;
+      if (!card.isConnected) {
+        pararRotulos(estado);
+        if (atual===estado && !estado.preparando && !estado.encerrando) iniciarRotulos(estado);
+        return;
+      }
+      mostrarRotulo=!mostrarRotulo;
+      estado.rotulosGuia?.forEach(({el,rotulo,texto}) => trocarTituloSuavemente(el,mostrarRotulo ? rotulo : texto));
+      if (mostrarRotulo) {
+        // Cores e texto começam no mesmo quadro e terminam em 300ms.
+          if (!estado.rotulosGuia || !card.isConnected) return;
+          const item=estado.atividadeGuia;
+          const tipoAnterior=normalizarTexto(item.tipo), areaAnterior=normalizarTexto(item.area);
+          for (const campo of ['tipo','area','professor']) item[campo]=sortearCampoGuia(estado,campo);
+          card.classList.remove(tipoAnterior,areaAnterior);
+          card.classList.add(normalizarTexto(item.tipo),normalizarTexto(item.area));
+          const tag=card.querySelector('.tag-tipo');
+          tag?.classList.remove(tipoAnterior);
+          tag?.classList.add(normalizarTexto(item.tipo));
+          const formato=sortearCampoGuia(estado,'formato');
+          atualizarAnexoGuia(estado,formato);
+          const arquivo=card.querySelector('.card-arquivo-anexo');
+          if (arquivo) {
+            arquivo.dataset.path=item.arquivos[0];
+            arquivo.querySelector('.nome-arquivo-anexo').title=nomesAnexosGuia[formato];
+            trocarTituloSuavemente(arquivo.querySelector('.icone-arquivo-anexo'),formato.toUpperCase());
+          }
+          const valores={'.card-materia':item.area,'.tag-tipo':proximas ? item.data.substring(0,5) : item.tipo,'.card-prof':'Prof. '+item.professor,'.nome-arquivo-anexo':nomesAnexosGuia[formato]};
+          estado.rotulosGuia.forEach(rotulo => {
+            if (valores[rotulo.seletor]) rotulo.original=rotulo.texto=valores[rotulo.seletor];
+          });
+          atualizarCacheAtividadesProximas();
+      }
+      estado.timerRotulos=setTimeout(oscilar,mostrarRotulo ? 1200 : 1800);
+    };
+    estado.timerRotulos=setTimeout(oscilar,1800);
+  }
+
+  function iniciarRotulosDrive(estado) {
+    const card=buscar('#lista-drives .card-drive');
+    if (!card) {
+      estado.timerAguardarRotulos=setTimeout(()=>{
+        if(atual===estado && !estado.preparando && estado.driveExemploAtivo) iniciarRotulosDrive(estado);
+      },100);
+      return;
+    }
+    estado.cardRotulos=card;
+    card.classList.add('guia-cores-sincronizadas');
+    estado.rotulosGuia=[['.area-drive h2','CONHECIMENTO'],['.dados-drive h2','Aplicador']].map(([seletor,rotulo])=>{
+      const el=card.querySelector(seletor);
+      return {el,rotulo,original:el.textContent,texto:el.textContent,seletor};
+    });
+    let conceito=false;
+    const oscilar=()=>{
+      if(atual!==estado || estado.preparando || estado.encerrando) return;
+      if(!card.isConnected) {pararRotulos(estado);iniciarRotulosDrive(estado);return;}
+      conceito=!conceito;
+      estado.rotulosGuia.forEach(({el,rotulo,texto})=>trocarTituloSuavemente(el,conceito?rotulo:texto));
+      if(conceito) {
+        const d=estado.driveExemplo;
+        card.classList.remove('drive-'+normalizarTexto(d.area));
+        d.area=sortearCampoGuia(estado,'area');
+        d.professor=sortearCampoGuia(estado,'professor');
+        card.classList.add('drive-'+normalizarTexto(d.area));
+        estado.rotulosGuia.forEach(r=>{r.original=r.texto=r.seletor==='.area-drive h2'?d.area:'Prof. '+d.professor;});
+      }
+      estado.timerRotulos=setTimeout(oscilar,conceito?1200:1800);
+    };
+    estado.timerRotulos=setTimeout(oscilar,1800);
+  }
+
+  function atualizarCartao(estado, etapa) {
+    pararCores(estado);
+    estado.animacaoVisto?.cancel();
+    estado.chaveMedida = null;
+    const barra = estado.cartao.querySelector('.guia-barra');
+    barra.setAttribute('aria-valuemax', etapas.length);
+    barra.setAttribute('aria-valuenow', estado.indice + 1);
+    barra.setAttribute('aria-valuetext', `Etapa ${estado.indice + 1} de ${etapas.length}`);
+    estado.cartao.querySelector('.guia-barra-preenchimento').style.width = `${(estado.indice+1)/etapas.length*100}%`;
+    estado.cartao.querySelector('.guia-titulo').textContent = etapa.titulo;
+    estado.cartao.querySelector('.guia-texto').innerHTML = `<h3 class="guia-titulo-inline">${etapa.titulo}</h3>` + etapa.texto(estado);
+    const voltar = estado.cartao.querySelector('.guia-voltar');
+    const primeira = estado.historico.length === 0;
+    estado.cartao.classList.toggle('guia-primeira', primeira);
+    estado.cartao.classList.toggle('guia-ultima', Boolean(etapa.final));
+    voltar.disabled = primeira;
+    voltar.setAttribute('aria-hidden', String(primeira));
+    const proximo = estado.cartao.querySelector('.guia-proximo');
+    proximo.setAttribute('aria-label', etapa.final ? 'Começar a usar o site' : 'Próxima etapa');
+    proximo.title = etapa.final ? 'Começar' : 'Próxima etapa';
+    proximo.hidden = Boolean(estado.indice === 2 && estado.conviteDia || etapa.notificacoes && !notificacoesAtivas());
+    estado.cartao.querySelector('.guia-acoes').hidden = !etapa.notificacoes || notificacoesAtivas();
+    const ativar = estado.cartao.querySelector('.guia-ativar');
+    ativar.textContent = 'ativar notificações';
+    ativar.disabled = false;
+    estado.cartao.querySelector('.guia-texto').scrollTop = 0;
+    iniciarCores(estado);
+    iniciarRotulos(estado);
+  }
+
+  function restaurarConviteDia(estado) {
+    if (!estado.conviteDia) return;
+    const {titulo,texto} = estado.conviteDia;
+    estado.conviteDia.inertes.forEach(el => { el.inert=true; });
+    trocarTituloSuavemente(titulo,texto);
+    titulo.closest('.card-atividade')?.classList.remove('guia-convite-dia');
+    estado.conviteDia = null;
+  }
+
+  function restaurarCliqueCalendario(estado) {
+    estado.inertesAparencia?.forEach(([el,valor])=>{el.inert=valor;});
+    estado.inertesAparencia=null;
+    estado.painelInterativo=null;
+    estado.inertesCalendario?.forEach(el=>{el.inert=true;});
+    estado.inertesCalendario=null;
+  }
+
+  function liberarCliqueCalendario(estado) {
+    if (etapas[estado.indice]?.alvos?.[0]==='.tema-container-aparencia') {
+      const painel=buscar('.tema-container-aparencia');
+      estado.painelInterativo=painel;
+      estado.inertesAparencia=[];
+      for(let el=painel;el && el!==document.body;el=el.parentElement) {
+        if(el.inert) {estado.inertesAparencia.push([el,true]);el.inert=false;}
+        for(const irmao of el.parentElement?.children || []) {
+          if(!permitirAnotacoes() && irmao!==el && irmao!==estado.dialogo && !irmao.inert) {
+            estado.inertesAparencia.push([irmao,false]);irmao.inert=true;
+          }
+        }
+      }
+    }
+    if (estado.indice!==0) return;
+    const dia=[...document.querySelectorAll('.grade-dias-mes li:not(.inativo)')]
+      .find(el=>el.dataset.dataCompleta===estado.atividadeGuia?.data);
+    estado.inertesCalendario=[];
+    for(let el=dia;el;el=el.parentElement) {
+      if(el.inert) {estado.inertesCalendario.push(el);el.inert=false;}
+    }
+  }
+
+  async function mostrarEtapa(indice, voltando = false) {
+    const estado = atual;
+    if (!estado || estado.preparando) return;
+    if (estado.chave !== chaveSala()) { encerrar(false, false); return; }
+    estado.preparando = true;
+    pararRotulos(estado);
+    if(estado.driveExemploAtivo) {estado.driveExemploAtivo=false;_iniciarCardDrive();}
+    if (getComputedStyle(estado.cartao).visibility !== 'hidden') await animarModalGuia(estado, false);
+    if (atual !== estado || estado.encerrando) return;
+    restaurarConviteDia(estado);
+    restaurarCliqueCalendario(estado);
+    estado.animacaoModal?.cancel();
+    estado.animarEntrada = true;
+    estado.medidaAnterior = estado.cartao.getBoundingClientRect();
+    estado.animacaoTamanho?.cancel();
+    estado.cartao.style.visibility = 'hidden';
+    estado.cartao.classList.add('guia-carregando');
+    estado.cartao.setAttribute('aria-busy', 'true');
+    estado.cartao.querySelector('.guia-proximo').disabled = true;
+    estado.cartao.querySelector('.guia-voltar').disabled = true;
+    estado.observador?.disconnect();
+    estado.tamanho?.disconnect();
+    const mesmaFonte = etapas[indice]?.alvos?.[0] && buscar(etapas[indice].alvos[0]) === estado.fontes[0];
+    const mesmosMateriais = etapas[indice]?.aba === 'btn-material' &&
+      etapas[estado.indice]?.aba === 'btn-material';
+    const mesmoDia = [2,3].includes(indice) && [2,3].includes(estado.indice);
+    const mesmaConfiguracao = [8,9].includes(indice) && [8,9].includes(estado.indice);
+    // O retorno do alvo anterior ocorre junto com a preparação do próximo.
+    // Etapas sobre o mesmo item conservam a posição já resolvida.
+    const retorno = indice !== 2 && (mesmaFonte || mesmosMateriais || mesmoDia || mesmaConfiguracao) ? Promise.resolve() : restaurarElevacao(estado);
+    if (!mesmaFonte && !mesmosMateriais && !mesmoDia && !mesmaConfiguracao) {
+      restaurarCamadas(estado);
+      estado.fontesCompletas = null;
+    }
+    const anterior = estado.indice;
+    const direcao = voltando ? -1 : 1;
+    let etapa, fontes;
+    while (indice >= 0 && indice < etapas.length) {
+      etapa = etapas[indice];
+      if (!mesmaFonte && !mesmosMateriais && !mesmoDia && !mesmaConfiguracao) fecharDemonstracao();
+      fontes = [];
+      if (etapa.final) break;
+      if (await trocarAba(etapa.aba)) {
+        const seletorInicial = etapa.alvos?.[0];
+        if (seletorInicial) acompanharAlvos(estado, [buscar(seletorInicial), etapa.botao && buscar(etapa.botao)]);
+        if (atual !== estado) return;
+        if (etapa.aguardar) await esperar(etapa.aguardar, estado);
+        if (etapa.preparar) {
+          const alvo = await etapa.preparar(estado);
+          // A transição pode começar com opacidade zero; isso não é uma etapa ausente.
+          if (alvo && await esperar(() => visivel(alvo), estado)) fontes.push(alvo);
+        } else {
+          const alvo = await esperar(() => etapa.alvos.map(buscar).find(visivel), estado);
+          if (alvo) fontes.push(alvo);
+        }
+        if (fontes.length) {
+          const botao = etapa.botao && buscar(etapa.botao);
+          if (visivel(botao)) fontes.push(botao);
+          break;
+        }
+      }
+      if (atual !== estado) return;
+      indice += direcao; // Elemento ausente: pula somente esta explicação.
+    }
+    await retorno;
+    if (atual !== estado) return;
+    if (indice < 0) { estado.preparando = false; mostrarEtapa(0); return; }
+    if (indice >= etapas.length) { estado.preparando = false; return; }
+    if (!voltando && anterior >= 0 && anterior !== indice) estado.historico.push(anterior);
+    if (atual !== estado) return;
+    estado.indice = indice;
+    liberarCliqueCalendario(estado);
+    estado.fontes = fontes;
+    destacarCamadas(estado);
+    atualizarCartao(estado, etapa);
+    estado.preparando = false;
+    estado.cartao.classList.remove('guia-carregando');
+    estado.cartao.setAttribute('aria-busy', 'false');
+    estado.cartao.querySelector('.guia-proximo').disabled = false;
+    estado.cartao.querySelector('.guia-voltar').disabled = estado.historico.length === 0;
+    atualizarDestaques(estado);
+    fontes.forEach(el => estado.observador.observe(el, { childList: true, subtree: true, characterData: true }));
+    fontes.forEach(el => estado.tamanho.observe(el));
+    estado.focarCartao = true;
+  }
+
+  async function ativarNotificacoes() {
+    const estado = atual;
+    if (!estado || estado.ativando) return;
+    estado.ativando = true;
+    const btn = estado.cartao.querySelector('.guia-ativar');
+    btn.disabled = true;
+    btn.textContent = 'ativando…';
+    try {
+      // Único ponto de ativação: o clique explícito, usando a rotina do projeto.
+      const ativa = await _ativarNotificacoesNoDispositivo();
+      _definirEstadoNotificacoesAtual(ativa);
+      if (!ativa) estado.aviso = 'Notification' in window && Notification.permission === 'denied'
+        ? 'Para receber lembretes, libere as notificações nas configurações do navegador.'
+        : 'As notificações não foram ativadas. Você pode tentar novamente pelo controle de notificações do site.';
+    } catch (_) {
+      estado.aviso = 'Não foi possível ativar as notificações agora. Você pode tentar novamente pelo controle de notificações do site.';
+    } finally {
+      estado.ativando = false;
+      if (atual === estado && etapas[estado.indice]?.notificacoes) mostrarEtapa(etapas.length - 1);
+    }
+  }
+
+  function iniciar(chave) {
+    const estado = { chave, podePular: pessoaConcluiuGuia, indice: -1, historico: [], fontes: [], molduras: [], preparando: false, frame: 0,
+      abaOriginal: buscar('.nav-btn.active')?.id || 'btn-calendario', focoOriginal: document.activeElement,
+      scrollX, scrollY, localOriginal: opcaoSelecionadaLocal, dataOriginal: dataSelecionadaStr,
+      diaOriginalAberto: Boolean(buscar('#painel-tarefas-dia:not(.oculto)')), aviso: '' };
+    const dialogo = document.createElement('div');
+    dialogo.id = 'guia-sala';
+    dialogo.setAttribute('role', 'region');
+    dialogo.setAttribute('aria-label', 'Guia de primeiro acesso');
+    dialogo.setAttribute('aria-describedby', 'guia-sala-texto');
+    dialogo.innerHTML = `<div class="guia-fundo"></div><section class="guia-cartao" style="visibility:hidden">
+      <header class="guia-cabecalho">
+        <button type="button" class="guia-pular fechar" aria-label="Pular guia" title="Pular guia"><svg class="icone-fechar" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        <h2 class="guia-titulo" id="guia-sala-titulo" tabindex="-1"></h2>
+      </header>
+      <div class="guia-barra" role="progressbar" aria-label="Progresso do guia" aria-valuemin="0" aria-valuemax="${etapas.length}" aria-valuenow="1"><span class="guia-barra-preenchimento"></span></div>
+      <div class="guia-texto" id="guia-sala-texto" tabindex="0"></div>
+      <div class="guia-controles"><div class="guia-acoes" hidden>
+        <button type="button" class="guia-ativar">ativar notificações</button>
+        <button type="button" class="guia-agora-nao">agora não</button>
+      </div><div class="guia-navegacao">
+        <button type="button" class="guia-voltar modal-confirmacao-cancelar" aria-label="Etapa anterior" title="Etapa anterior">${icone('m15 18-6-6 6-6')}</button>
+        <button type="button" class="guia-proximo modal-confirmacao-confirmar" aria-label="Próxima etapa" title="Próxima etapa">${icone('M9 18 L15 12 L9 6')}</button>
+      </div></div>
+    </section>`;
+    document.body.appendChild(dialogo);
+    estado.dialogo = dialogo;
+    estado.fundo = dialogo.querySelector('.guia-fundo');
+    estado.cartao = dialogo.querySelector('.guia-cartao');
+    // A explicação fica na camada superior nativa, inclusive acima da navbar.
+    estado.cartao.setAttribute('popover','manual');
+    estado.cartao.showPopover();
+    estado.cartao.setAttribute('role', 'dialog');
+    estado.cartao.setAttribute('aria-modal', 'true');
+    estado.cartao.setAttribute('aria-labelledby', 'guia-sala-titulo');
+    estado.cartao.setAttribute('aria-describedby', 'guia-sala-texto');
+    estado.observador = new MutationObserver(() => solicitarPosicao(estado));
+    estado.tamanho = new ResizeObserver(() => solicitarPosicao(estado));
+    estado.eventos = new AbortController();
+    const { signal } = estado.eventos;
+    atual = estado;
+    criarAtividadeGuia(estado);
+    // O cartão explica; a camada de foco revela somente elementos reais do site.
+    estado.inertes = [...document.body.children].filter(el => el !== dialogo).map(el => [el, el.inert]);
+    if (!permitirAnotacoes()) estado.inertes.forEach(([el]) => { el.inert = true; });
+    const pular = dialogo.querySelector('.guia-pular');
+    pular.hidden = !estado.podePular;
+    pular.addEventListener('click', () => { if (estado.podePular) encerrar(true); }, { signal });
+    dialogo.querySelector('.guia-proximo').addEventListener('click', () => {
+      if (etapas[estado.indice]?.final) encerrar(true);
+      else mostrarEtapa(estado.indice + 1);
+    }, { signal });
+    dialogo.querySelector('.guia-voltar').addEventListener('click', () => {
+      if (!estado.preparando && estado.historico.length) mostrarEtapa(estado.historico.pop(), true);
+    }, { signal });
+    dialogo.querySelector('.guia-agora-nao').addEventListener('click', () => mostrarEtapa(etapas.length - 1), { signal });
+    dialogo.querySelector('.guia-ativar').addEventListener('click', ativarNotificacoes, { signal });
+    window.addEventListener('keydown', e => {
+      if (permitirAnotacoes()) return;
+      if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); if (estado.podePular) encerrar(true); }
+      else if (e.key === 'Tab') {
+        const botoes = [...estado.cartao.querySelectorAll('button, [tabindex="0"]'),
+          ...(estado.painelInterativo ? estado.painelInterativo.querySelectorAll('button, input, select, [tabindex="0"]') : []),
+          ...(estado.conviteDia ? [estado.conviteDia.titulo] : []),
+          ...(estado.manualGuia ? estado.manualGuia.querySelectorAll('#botao-notificacoes') : [])].filter(el => !el.disabled && visivel(el));
+        if (!botoes.length) return;
+        const primeiro = botoes[0], ultimo = botoes[botoes.length - 1];
+        if (e.shiftKey && (document.activeElement === primeiro || !botoes.includes(document.activeElement))) {
+          e.preventDefault(); ultimo.focus();
+        } else if (!e.shiftKey && (document.activeElement === ultimo || !botoes.includes(document.activeElement))) {
+          e.preventDefault(); primeiro.focus();
+        }
+      }
+    }, { capture: true, signal });
+    // Bloqueia inclusive cliques programáticos nos controles originais enquanto
+    // demonstra os elementos. Os controles de navegação do guia são a única exceção.
+    const bloquear = e => {
+      if (permitirAnotacoes()) return;
+      if (!estado.preparando && estado.painelInterativo?.contains(e.target)) return;
+      const dia=e.target.closest?.('.grade-dias-mes li.tem-tarefa');
+      if (estado.indice===0 && !estado.preparando && dia) {
+        if(e.type==='click') {
+          e.preventDefault(); e.stopImmediatePropagation();
+          mostrarEtapa(1);
+        }
+        return;
+      }
+      if (estado.indice === 2 && !estado.preparando && estado.conviteDia?.titulo.contains(e.target)) {
+        if (e.type === 'click') {
+          e.preventDefault(); e.stopImmediatePropagation();
+          mostrarEtapa(3);
+        }
+        return;
+      }
+      if (estado.manualGuia && e.target.closest?.('#botao-notificacoes')) return;
+      if (!estado.cartao.contains(e.target)) { e.preventDefault(); e.stopImmediatePropagation(); }
+    };
+    ['click', 'pointerdown', 'dblclick', 'contextmenu'].forEach(tipo =>
+      window.addEventListener(tipo, bloquear, { capture: true, signal }));
+    const bloquearRolagem = e => {
+      if (permitirAnotacoes()) return;
+      if (!estado.preparando && estado.painelInterativo?.contains(e.target)) return;
+      if (!estado.cartao.contains(e.target)) e.preventDefault();
+    };
+    window.addEventListener('wheel', bloquearRolagem, { passive: false, signal });
+    window.addEventListener('touchmove', bloquearRolagem, { passive: false, signal });
+    window.addEventListener('resize', () => solicitarPosicao(estado), { signal });
+    window.addEventListener('orientationchange', () => solicitarPosicao(estado), { signal });
+    ['transitionrun', 'transitionend', 'transitioncancel', 'animationstart', 'animationend'].forEach(tipo => document.addEventListener(tipo, e => {
+      if (estado.fontes.some(el => el === e.target || el.contains(e.target) || e.target.contains?.(el))) solicitarPosicao(estado);
+    }, { capture: true, signal }));
+    document.addEventListener('scroll', e => { if (!estado.dialogo.contains(e.target)) solicitarPosicao(estado); }, { capture: true, signal });
+    window.visualViewport?.addEventListener('resize', () => solicitarPosicao(estado), { signal });
+    window.visualViewport?.addEventListener('scroll', () => solicitarPosicao(estado), { signal });
+    window.addEventListener('pagehide', () => encerrar(false, false), { signal });
+    mostrarEtapa(0);
+  }
+
+  async function encerrar(registrar = true, restaurar = true) {
+    const estado = atual;
+    if (!estado || estado.encerrando) return;
+    estado.encerrando = true;
+    if(estado.driveExemploAtivo) {estado.driveExemploAtivo=false;_iniciarCardDrive();}
+    restaurarCliqueCalendario(estado);
+    pararRotulos(estado);
+    restaurarConviteDia(estado);
+    pararCores(estado);
+    estado.preparando = true;
+    if (estado.frame) cancelAnimationFrame(estado.frame);
+    estado.frame = 0;
+    if (restaurar && getComputedStyle(estado.cartao).visibility !== 'hidden') await animarModalGuia(estado, false);
+    estado.animacaoModal?.cancel();
+    if (estado.manualGuia) {
+      estado.manualGuia.remove();
+      if (_modalManualEl === estado.manualGuia) _modalManualEl = null;
+      estado.manualGuia = null;
+    }
+    todosDados = todosDados.filter(item => item.id !== estado.atividadeGuia?.id);
+    if (estado.anexoGuia) URL.revokeObjectURL(estado.anexoGuia);
+    if (estado.chave === chaveSala() && estado.calendarioOriginal) {
+      mesAtual = estado.calendarioOriginal.mes;
+      anoAtual = estado.calendarioOriginal.ano;
+      _filtroExibicao.casa = estado.calendarioOriginal.casa;
+      atualizarCacheAtividadesProximas();
+      renderizarCalendarioComEventos();
+    }
+    atual = null;
+    ++agendamento;
+    estado.eventos.abort();
+    estado.observador.disconnect();
+    estado.tamanho.disconnect();
+    if (estado.frame) cancelAnimationFrame(estado.frame);
+    estado.animacaoTamanho?.cancel();
+    restaurarDestaques(estado);
+    restaurarElevacao(estado, restaurar).finally(() => restaurarCamadas(estado));
+    estado.inertes.forEach(([el, anterior]) => { el.inert = anterior; });
+    estado.dialogo.remove();
+    if (registrar) {
+      pessoaConcluiuGuia = true;
+      try { localStorage.setItem(chavePrimeiroGuia, '1'); } catch (_) {}
+      concluidasNestaPagina.add(estado.chave);
+      try { localStorage.setItem(estado.chave, '1'); } catch (_) {}
+    }
+    if (restaurar && estado.chave === chaveSala()) {
+      fecharDemonstracao();
+      trocarAba(estado.abaOriginal);
+      opcaoSelecionadaLocal = estado.localOriginal;
+      dataSelecionadaStr = estado.dataOriginal;
+      if (estado.diaOriginalAberto && estado.abaOriginal === 'btn-calendario' && estado.dataOriginal) {
+        const [dia, mes] = estado.dataOriginal.split('/').map(Number);
+        abrirPainelDia(dia, mes - 1, estado.dataOriginal);
+        alternarFiltroLocal(estado.localOriginal);
+      }
+      window.scrollTo({ left: estado.scrollX, top: estado.scrollY, behavior: 'instant' });
+      const foco = estado.focoOriginal?.isConnected && visivel(estado.focoOriginal)
+        ? estado.focoOriginal : document.getElementById(estado.abaOriginal);
+      foco?.focus({ preventScroll: true });
+    }
+  }
+
+  return { agendar, encerrar, reabrir, complementarDados,
+    priorizar: itens => atual?.atividadeGuia && !atual.encerrando
+      ? [...itens.filter(item=>item.id===atual.atividadeGuia.id),...itens.filter(item=>item.id!==atual.atividadeGuia.id)] : itens,
+    drives: originais => atual?.driveExemploAtivo ? [atual.driveExemplo,...originais.filter(item=>item.id!==atual.driveExemplo.id)] : originais,
+    urlAnexo: path => atual?.atividadeGuia?.arquivos.includes(path) ? atual.anexoGuia : null };
+})();
+/* FIM — Guia de primeiro acesso por sala. */
+
+
+// Mantém o mesmo fundo da plataforma nos cards de EVENTO, inclusive nas prévias.
+(() => {
+  const atualizar = () => {
+    document.querySelectorAll('.card-atividade').forEach(card => {
+      const fundo = card.querySelector(':scope > .fundo-evento');
+      if (!card.classList.contains('integrado')) {
+        if (!fundo || card.dataset.saidaIntegrado) return;
+        card.dataset.saidaIntegrado='1';
+        card.classList.add('integrado-saindo');
+        const camadas=[fundo,card.querySelector(':scope > .brilho-evento')].filter(Boolean);
+        const animacoes=camadas.map(el=>el.animate([{opacity:getComputedStyle(el).opacity},{opacity:0}],{duration:300,easing:'ease',fill:'forwards'}));
+        Promise.all(animacoes.map(a=>a.finished.catch(()=>{}))).then(()=>{
+          if(!card.classList.contains('integrado'))camadas.forEach(el=>el.remove());
+          animacoes.forEach(a=>a.cancel());
+          card.classList.remove('integrado-saindo');delete card.dataset.saidaIntegrado;
+        });
+        return;
+      }
+      if (fundo) return;
+      const camada = document.createElement('div');
+      camada.className = 'fundo-evento';
+      camada.setAttribute('aria-hidden','true');
+      camada.innerHTML = '<div class="blob-itin"></div><div class="blob-hum"></div><div class="blob-nat"></div>';
+      const brilho = camada.cloneNode(true);
+      brilho.className = 'brilho-evento';
+      card.prepend(brilho, camada);
+    });
+  };
+  const observer = new MutationObserver(atualizar);
+  observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
+  atualizar();
+})();
+
+// Recorte real: as letras revelam o fundo animado que passa atrás do título.
+(() => {
+  const vistos=new WeakSet();
+  function desenhar(el) {
+    if(!el.closest('.integrado')) {el.classList.remove('evento-recorte');el.querySelector(':scope > .janela-letras')?.remove();return;}
+    const w=el.clientWidth,h=el.clientHeight;if(!w||!h)return;
+    const estilo=getComputedStyle(el),canvas=document.createElement('canvas'),dpr=devicePixelRatio||1;
+    canvas.width=Math.ceil(w*dpr);canvas.height=Math.ceil(h*dpr);
+    const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.fillStyle='#fff';
+    ctx.globalCompositeOperation='source-over';
+    ctx.font=`${estilo.fontStyle} ${estilo.fontWeight} ${estilo.fontSize} ${estilo.fontFamily}`;
+    const espaco=w-parseFloat(estilo.paddingLeft)-parseFloat(estilo.paddingRight);
+    let texto=el.textContent.trim();if(ctx.measureText(texto).width>espaco){while(texto.length&&ctx.measureText(texto+'…').width>espaco)texto=texto.slice(0,-1);texto+='…';}
+    ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(texto,w/2,h/2);
+    el.style.setProperty('--mascara-evento',`url("${canvas.toDataURL()}")`);
+    el.classList.add('evento-recorte');
+    let janela=el.querySelector(':scope > .janela-letras');
+    if(!janela){
+      janela=document.createElement('span');janela.className='janela-letras';janela.setAttribute('aria-hidden','true');
+      janela.innerHTML='<span class="fundo-letras"><span class="blob-itin"></span><span class="blob-hum"></span><span class="blob-nat"></span></span>';
+      el.append(janela);
+    }
+    const palavra=el.querySelector('.guia-palavra-titulo');
+    const animacao=palavra?.getAnimations().find(a=>a.playState==='running');
+    if(animacao && !janela.getAnimations().some(a=>a.playState==='running')) {
+      const copia=janela.animate(animacao.effect.getKeyframes(),animacao.effect.getTiming());
+      copia.currentTime=animacao.currentTime;
+      copia.finished.then(()=>copia.cancel()).catch(()=>{});
+    }
+    const card=el.closest('.card-atividade'),fundo=janela.firstElementChild;
+    fundo.style.width=card.clientWidth+'px';fundo.style.height=card.clientHeight+'px';
+    fundo.style.left=-el.offsetLeft+'px';fundo.style.top=-el.offsetTop+'px';
+    requestAnimationFrame(()=>{
+      const origem=card.querySelector(':scope > .fundo-evento');
+      const tempos=new Map(origem?.getAnimations({subtree:true}).map(a=>[a.animationName,a.currentTime])||[]);
+      fundo.getAnimations({subtree:true}).forEach(a=>{if(tempos.has(a.animationName))a.currentTime=tempos.get(a.animationName);});
+    });
+  }
+  const resize=new ResizeObserver(entries=>entries.forEach(e=>desenhar(e.target)));
+  const atualizar=()=>document.querySelectorAll('.card-atividade .card-titulo').forEach(el=>{
+    if(vistos.has(el))return;vistos.add(el);resize.observe(el);
+    new MutationObserver(()=>desenhar(el)).observe(el.closest('.card-atividade'),{attributes:true,attributeFilter:['class']});
+    new MutationObserver(()=>desenhar(el)).observe(el,{childList:true,characterData:true,subtree:true});
+    desenhar(el);document.fonts.ready.then(()=>desenhar(el));
+  });
+  new MutationObserver(atualizar).observe(document.body,{childList:true,subtree:true});atualizar();
+})();
+
+const trocasPalavrasEditor=new WeakMap();
+function trocarPalavraEditor(el,texto,indice) {
+ const anterior=trocasPalavrasEditor.get(el);anterior?.animacao?.cancel();
+ const estado={indice};trocasPalavrasEditor.set(el,estado);
+ if(!anterior||anterior.indice===indice||matchMedia('(prefers-reduced-motion: reduce)').matches){el.textContent=texto;return;}
+ const sentido=indice>anterior.indice?1:-1;
+ estado.animacao=el.animate([{opacity:1,translate:'0px'},{opacity:0,translate:sentido*12+'px'}],{duration:110,easing:'ease-in',fill:'forwards'});
+ estado.animacao.finished.then(()=>{
+ if(trocasPalavrasEditor.get(el)!==estado)return;
+ el.textContent=texto;estado.animacao.cancel();
+ estado.animacao=el.animate([{opacity:0,translate:-sentido*12+'px'},{opacity:1,translate:'0px'}],{duration:170,easing:'ease-out'});
+ }).catch(()=>{});
+}
+(() => {
+ const atualizar=()=>{
+  document.querySelectorAll('.aula-span.aula-integrado').forEach(el=>{
+   if(el.dataset.textoBrilho!==el.textContent)el.dataset.textoBrilho=el.textContent;
+  });
+  document.querySelectorAll('.card-drive:not(.drive-integrado) > .brilho-drive-integrado').forEach(el=>{
+   const card=el.parentElement,area=card.querySelector(':scope > .area-drive');
+   if(area){
+    const camada=area.cloneNode(true);camada.className='fundo-drive-saindo';camada.querySelectorAll('h2').forEach(h=>h.remove());
+    camada.style.height=area.offsetHeight+'px';card.classList.add('drive-integrado-saindo');card.prepend(camada);
+    const fade=camada.animate([{opacity:1},{opacity:0}],{duration:300,easing:'ease',fill:'forwards'});
+    fade.finished.then(()=>{camada.remove();card.classList.remove('drive-integrado-saindo');}).catch(()=>{});
+   }
+   el.remove();
+  });
+  document.querySelectorAll('.card-drive:not(.drive-integrado) > .area-drive > .blob-itin, .card-drive:not(.drive-integrado) > .area-drive > .blob-hum, .card-drive:not(.drive-integrado) > .area-drive > .blob-nat').forEach(el=>el.remove());
+  document.querySelectorAll('.card-drive.drive-integrado > .area-drive:not(.brilho-drive-integrado)').forEach(area=>{
+   if(!area.querySelector('.blob-itin'))for(const nome of ['itin','hum','nat']) {const blob=document.createElement('div');blob.className='blob-'+nome;blob.setAttribute('aria-hidden','true');area.appendChild(blob);}
+   if(area.parentElement.querySelector('.brilho-drive-integrado'))return;
+   const brilho=area.cloneNode(true);brilho.className='brilho-drive-integrado';brilho.querySelectorAll('h2').forEach(el=>el.remove());brilho.setAttribute('aria-hidden','true');area.parentElement.prepend(brilho);
+   requestAnimationFrame(()=>{
+    const tempos=new Map(area.getAnimations({subtree:true}).map(a=>[a.animationName,a.currentTime]));
+    brilho.getAnimations({subtree:true}).forEach(a=>{if(tempos.has(a.animationName))a.currentTime=tempos.get(a.animationName);});
+   });
+  });
+  const card=document.querySelector('#portal-1');
+  const banner=card?.querySelector(':scope > .baner-plataforma');
+  if(!banner||card.querySelector(':scope > .brilho-portal'))return;
+  const brilho=banner.cloneNode(true);brilho.classList.add('brilho-portal');brilho.querySelectorAll('h2').forEach(el=>el.remove());brilho.setAttribute('aria-hidden','true');card.prepend(brilho);
+  requestAnimationFrame(()=>{
+   const tempos=new Map(banner.getAnimations({subtree:true}).map(a=>[a.animationName,a.currentTime]));
+   brilho.getAnimations({subtree:true}).forEach(a=>{if(tempos.has(a.animationName))a.currentTime=tempos.get(a.animationName);});
+  });
+ };
+ new MutationObserver(atualizar).observe(document.body,{childList:true,characterData:true,subtree:true});atualizar();
+})();
+/* Representantes alternam ajuda/editor no mesmo contexto. */
+(() => {
+ const botao=document.getElementById('botao-acao-topo');if(!botao)return;
+ const preferencias=new Map();
+ const contexto=()=>{
+  if(!sessao)return null;
+  const aba=document.querySelector('.nav-btn.active')?.id;
+  if(aba==='btn-calendario')return aba;
+  if(aba==='btn-material'){
+   const aberto=document.querySelector('#material-horario.material-aberto, #material-drive.material-aberto');
+   return aberto ? aberto.id : null;
+  }
+  return null;
+ };
+ const aplicar=()=>{
+  const chave=contexto();if(!chave||!preferencias.has(chave))return;
+  const modo=preferencias.get(chave);
+  botao.classList.toggle('funcao-editor',modo==='editor');botao.classList.toggle('funcao-manual',modo==='manual');
+ };
+ const atualizar=atualizarModoBotaoAcao;
+ atualizarModoBotaoAcao=function(...args){atualizar(...args);aplicar();};
+ const materiais=_atualizarModoBotaoMaterial;
+ _atualizarModoBotaoMaterial=function(...args){materiais(...args);aplicar();};
+ const alternar=()=>{
+  const chave=contexto();if(!chave)return false;
+  const modo=botao.classList.contains('funcao-editor')?'manual':'editor';
+  preferencias.set(chave,modo);
+  if(modo==='manual'){fecharEditorCalendario();fecharEditorMaterial();}
+  aplicar();return true;
+ };
+ let timer=null,suprimirClique=false,origem=null;
+ const cancelar=()=>{clearTimeout(timer);timer=null;origem=null;};
+ botao.addEventListener('contextmenu',e=>{cancelar();if(alternar()){e.preventDefault();e.stopPropagation();}});
+ botao.addEventListener('pointerdown',e=>{
+  if(e.button!==0||!contexto())return;
+  cancelar();suprimirClique=false;origem={x:e.clientX,y:e.clientY};
+  timer=setTimeout(()=>{if(alternar())suprimirClique=true;timer=null;},1800);
+ });
+ botao.addEventListener('pointermove',e=>{if(origem&&Math.hypot(e.clientX-origem.x,e.clientY-origem.y)>12)cancelar();});
+ for(const evento of ['pointerup','pointercancel','pointerleave'])botao.addEventListener(evento,cancelar);
+ botao.addEventListener('click',e=>{if(!suprimirClique)return;suprimirClique=false;e.preventDefault();e.stopImmediatePropagation();},true);
+})();
+
+
+
+
+let animacoesTrocaMes=[];
+function navegarEntreMeses(dir) {
+ const painel=document.querySelector('#container-calendario-principal');
+ if(!painel){navegarEntreMesesSemAnimacao(dir);return;}
+ const semanaAnterior=[...painel.querySelectorAll('.lista-cabecalho-semana li')].map(el=>el.textContent);
+ const primeiroDiaAnterior=new Date(anoAtual,mesAtual,1).getDay();
+ const antigos=[...painel.querySelectorAll('.grade-dias-mes li')].map(el=>{
+  const c=getComputedStyle(el);return {numero:el.querySelector('.numero-mes-transicao')?.textContent||el.textContent,backgroundColor:c.backgroundColor,color:c.color,boxShadow:c.boxShadow};
+ });
+ animacoesTrocaMes.forEach(a=>a.cancel());animacoesTrocaMes=[];
+ navegarEntreMesesSemAnimacao(dir);
+ if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+ const nome=painel.querySelector('.texto-mes-atual');
+ animacoesTrocaMes.push(nome.animate([{opacity:0,translate:(dir*10)+'px'},{opacity:1,translate:'0px'}],{duration:220,easing:'ease-out'}));
+ painel.querySelectorAll('.lista-cabecalho-semana li').forEach((el,i)=>{
+  if(new Date(anoAtual,mesAtual,1).getDay()===primeiroDiaAnterior)return;
+  animacoesTrocaMes.push(el.animate([{opacity:0,translate:(dir*6)+'px'},{opacity:1,translate:'0px'}],{duration:220,easing:'ease-out'}));
+ });
+ painel.querySelectorAll('.grade-dias-mes li').forEach((el,i)=>{
+  const antigo=antigos[i];if(!antigo)return;const c=getComputedStyle(el);
+  if(!el.classList.contains('inativo')) {
+   const destino={fundo:c.backgroundColor,letra:c.color};
+   el.style.setProperty('--cal-fundo-transicao',destino.fundo);el.style.setProperty('--cal-letra-transicao',destino.letra);
+   el.classList.add('dia-cor-transicao');
+   const cor=el.animate([{'--cal-fundo-transicao':antigo.backgroundColor,'--cal-letra-transicao':antigo.color},{'--cal-fundo-transicao':destino.fundo,'--cal-letra-transicao':destino.letra}],{duration:240,easing:'ease-out'});
+   animacoesTrocaMes.push(cor);
+   cor.finished.then(()=>el.classList.remove('dia-cor-transicao')).catch(()=>{});
+  }
+  if(antigo.numero===el.textContent)return;
+  const numero=document.createElement('span');numero.className='numero-mes-transicao';numero.textContent=el.textContent;el.replaceChildren(numero);
+  const fade=numero.animate([{opacity:0},{opacity:1}],{duration:220,easing:'ease-out'});
+  animacoesTrocaMes.push(fade);
+ });
+}
+
+(() => {
+ const posicionar=()=>{
+  const modal=document.querySelector('#modal-manual-overlay > .modal-manual');if(!modal)return;
+  const calendario=document.querySelector('#container-calendario-principal');
+  const r=calendario?.getBoundingClientRect();
+  modal.style.left=(r&&r.width?r.left+r.width/2:innerWidth/2)+'px';
+  modal.style.top=(r&&r.height?r.top+r.height/2:innerHeight*.4775)+'px';
+ };
+ new MutationObserver(posicionar).observe(document.body,{childList:true,subtree:true});
+ window.addEventListener('resize',posicionar);
+})();
+
+var filtroTipoManualTemporario=null;
+let timerFiltroTipoManual=null;
+let versaoFiltroTipoManual=0;
+function aplicarFiltroTipoManual(tipo) {
+ clearTimeout(timerFiltroTipoManual);
+ filtroTipoManualTemporario=tipo;
+ const calendario=document.querySelector('#container-calendario-principal');
+ calendario?.style.setProperty('--cor-exposicao-tipo', `var(--cor-${tipo})`);
+ calendario?.classList.add('calendario-exposicao-tipo');
+ renderizarExposicaoTiposSuavemente();iniciarAnimacaoDiasMultiplos();
+ timerFiltroTipoManual=setTimeout(()=>{
+  filtroTipoManualTemporario=null;
+  calendario?.classList.remove('calendario-exposicao-tipo');
+  if(document.querySelector('#container-calendario-principal')){renderizarExposicaoTiposSuavemente();iniciarAnimacaoDiasMultiplos();}
+ },2400);
+}
+function vincularTiposManualExtra(root,fechar) {
+ root.querySelectorAll('.manual-atividade').forEach(item=>{
+  item.setAttribute('role','button');item.tabIndex=0;
+  const acionar=()=>{
+   const tipo=item.id.replace('manual-','');
+   const total=todosDados.filter(a=>normalizarTexto(a.tipo)===tipo).length;
+   const numero=item.querySelector('.n-quantidade-manual');
+   numero.animate([{opacity:1,translate:'0px'},{opacity:0,translate:'0 -4px'}],{duration:100,easing:'ease-in'});
+   const versao=++versaoFiltroTipoManual;
+   setTimeout(()=>{if(versao!==versaoFiltroTipoManual||!item.isConnected)return;numero.textContent=String(total);numero.animate([{opacity:0,translate:'0 4px'},{opacity:1,translate:'0px'}],{duration:160,easing:'ease-out'});},100);
+   setTimeout(()=>{
+    if(versao!==versaoFiltroTipoManual||!item.isConnected)return;
+    fechar();
+    setTimeout(()=>aplicarFiltroTipoManual(tipo),250);
+   },1460);
+  };
+  item.addEventListener('click',acionar);
+  item.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();acionar();}});
+ });
+}
+
+
+function renderizarExposicaoTiposSuavemente() {
+ const anteriores=new Map([...document.querySelectorAll('.grade-dias-mes li')].map(el=>[el.dataset.dataCompleta,el]));
+ renderizarCalendarioComEventos();
+ document.querySelectorAll('.grade-dias-mes li').forEach(novo=>{
+  const antigo=anteriores.get(novo.dataset.dataCompleta);if(!antigo)return;
+  const classe=novo.className,atributos=[...novo.attributes].map(a=>[a.name,a.value]);
+  novo.replaceWith(antigo);
+  void antigo.getBoundingClientRect();
+  antigo.className=classe;
+  [...antigo.attributes].filter(a=>a.name.startsWith('data-')).forEach(a=>antigo.removeAttribute(a.name));
+  atributos.filter(([nome])=>nome.startsWith('data-')).forEach(([nome,valor])=>antigo.setAttribute(nome,valor));
+ });
+}
+
+
+
+// Links de detalhes usam a mesma confirmação nativa dos acessos externos.
+document.addEventListener('click',event=>{
+ const link=event.target.closest?.('.card-atividade .card-detalhes a[href]');
+ if(!link)return;
+ const url=new URL(link.href,document.baseURI);
+ if(!['https:','http:'].includes(url.protocol))return;
+ event.preventDefault();event.stopPropagation();
+ const card=link.closest('.card-atividade');
+ const item=todosDados.find(item=>String(item.id)===card.dataset.itemId);
+ const titulo=item?.descricao_titulo || card.querySelector('.card-titulo')?.textContent.trim() || 'Atividade';
+ _exibirConfirmacaoAcessarPlataforma(url.href,url.hostname);
+ const modal=_overlayAcessarPlataforma.querySelector('.modal-confirmacao-acessar');
+ modal.classList.add('confirmacao-link-atividade');
+ const cabecalho=modal.querySelector('.texto-acessar-confirmacao > h2');
+ cabecalho.textContent=titulo;cabecalho.title=titulo;
+},true);

@@ -1,11 +1,16 @@
-const CACHE = 'quadro-v1.2.2';
+const CACHE = 'quadro-2026-09-30-291f6403e350';
 
 const ARQUIVOS_OFFLINE = [
   '/index.html',
-  '/index.css',
-  '/index.js',
+  '/index.css?v=291f6403e350',
+  '/index.js?v=291f6403e350',
   '/manifest.json',
-  '/icons/notificacao-192.png'
+  '/icons/notificacao-192.png',
+  '/anexos-guia/conteudo.pptx',
+  '/anexos-guia/lista.png',
+  '/anexos-guia/notas.xlsx',
+  '/anexos-guia/roteiro.pdf',
+  '/anexos-guia/termos.docx'
 ];
 
 async function fecharNotificacoesExibidas(atividadeId = null) {

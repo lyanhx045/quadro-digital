@@ -266,7 +266,7 @@ function normalizarTextoNotificacao(valor) {
 
 function obterTipoNotificacao(atividade) {
   const tipo = normalizarTextoNotificacao(atividade?.tipo);
-  return ['prova', 'teste', 'projeto', 'tarefa'].includes(tipo)
+  return ['prova', 'teste', 'projeto', 'tarefa', 'evento'].includes(tipo)
     ? tipo
     : 'tarefa';
 }
@@ -295,6 +295,7 @@ function criarTextoNotificacao(atividade, evento, opcoes = {}) {
 
   const titulosPublicacao = {
     prova: 'Nova prova',
+    evento: 'Novo evento',
     teste: 'Novo teste',
     projeto: 'Novo projeto',
     tarefa: 'Nova tarefa',
@@ -302,6 +303,7 @@ function criarTextoNotificacao(atividade, evento, opcoes = {}) {
 
   const titulosAlteracao = {
     prova: 'Data da prova alterada',
+    evento: 'Data do evento alterada',
     teste: 'Data do teste alterada',
     projeto: 'Data do projeto alterada',
     tarefa: 'Data da tarefa alterada',
@@ -309,6 +311,7 @@ function criarTextoNotificacao(atividade, evento, opcoes = {}) {
 
   const titulosCancelamento = {
     prova: 'Prova cancelada',
+    evento: 'Evento cancelado',
     teste: 'Teste cancelado',
     projeto: 'Projeto cancelado',
     tarefa: 'Tarefa cancelada',
@@ -316,6 +319,7 @@ function criarTextoNotificacao(atividade, evento, opcoes = {}) {
 
   const titulosAmanha = {
     prova: 'Prova amanhã',
+    evento: 'Evento amanhã',
     teste: 'Teste amanhã',
     projeto: 'Projeto para amanhã',
     tarefa: 'Tarefa para amanhã',
