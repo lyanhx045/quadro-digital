@@ -7262,9 +7262,9 @@ const guiaSala = (() => {
     solicitarPosicao(estado);
   }
 
-  function solicitarPosicao(estado) {
+  function solicitarPosicao(estado, duracao = 1800) {
     if (atual !== estado || estado.encerrando) return;
-    estado.acompanharAte = performance.now() + 1800;
+    estado.acompanharAte = Math.max(estado.acompanharAte || 0, performance.now() + duracao);
     if (estado.frame) return;
     // ResizeObserver não acompanha transformações; segue a geometria real
     // durante a transição e para sozinho quando a janela de movimento termina.
@@ -7717,8 +7717,8 @@ const guiaSala = (() => {
     estado.cartao.setAttribute('aria-modal', 'true');
     estado.cartao.setAttribute('aria-labelledby', 'guia-sala-titulo');
     estado.cartao.setAttribute('aria-describedby', 'guia-sala-texto');
-    estado.observador = new MutationObserver(() => solicitarPosicao(estado));
-    estado.tamanho = new ResizeObserver(() => solicitarPosicao(estado));
+    estado.observador = new MutationObserver(() => solicitarPosicao(estado, 100));
+    estado.tamanho = new ResizeObserver(() => solicitarPosicao(estado, 100));
     estado.eventos = new AbortController();
     const { signal } = estado.eventos;
     atual = estado;
@@ -7790,6 +7790,11 @@ const guiaSala = (() => {
     window.addEventListener('resize', () => solicitarPosicao(estado), { signal });
     window.addEventListener('orientationchange', () => solicitarPosicao(estado), { signal });
     ['transitionrun', 'transitionend', 'transitioncancel', 'animationstart', 'animationend'].forEach(tipo => document.addEventListener(tipo, e => {
+      // Cores, brilho e opacidade não alteram o recorte do guia.
+      // Acompanha somente animações que podem mover ou redimensionar o alvo.
+      if (e.type.startsWith('transition') && !/^(transform|translate|scale|rotate|width|height|max-height|min-height|top|left|right|bottom|margin.*|padding.*|flex.*|grid.*)$/.test(e.propertyName)) return;
+      if (e.target.matches?.('.blob, .fundo-evento, .brilho-evento, .fundo-evento-letras, .brilho-drive-integrado') || e.target.closest?.('.fundo-evento, .brilho-evento, .brilho-drive-integrado')) return;
+      if (e.type.startsWith('animation') && /paleta|blob|brilho|ponto|cor|gradiente/i.test(e.animationName)) return;
       if (estado.fontes.some(el => el === e.target || el.contains(e.target) || e.target.contains?.(el))) solicitarPosicao(estado);
     }, { capture: true, signal }));
     document.addEventListener('scroll', e => { if (!estado.dialogo.contains(e.target)) solicitarPosicao(estado); }, { capture: true, signal });
