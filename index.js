@@ -8099,13 +8099,6 @@ function navegarEntreMeses(dir) {
  window.addEventListener('resize',posicionar);
 })();
 
-/* Não mantém animações e filtros dos cards fora da lista visível em execução. */
-(() => {
- const vistos=new WeakSet();
- const visibilidade=new IntersectionObserver(entries=>entries.forEach(({target,isIntersecting})=>target.classList.toggle('card-fora-da-lista',!isIntersecting)),{rootMargin:'100px'});
- const observar=()=>document.querySelectorAll('.lista-atividades-proximas .card-atividade').forEach(card=>{if(vistos.has(card))return;vistos.add(card);visibilidade.observe(card);});
- new MutationObserver(observar).observe(document.body,{childList:true,subtree:true});observar();
-})();
 
 var filtroTipoManualTemporario=null;
 let timerFiltroTipoManual=null;

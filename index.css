@@ -7509,6 +7509,22 @@ body { width:100%; max-width:100%; }
 .card-atividade.integrado > :is(.card-materia,.card-prof,.card-detalhes,.lista-anexos-card) { z-index:2; }
 .card-atividade.integrado > .tag-tipo,
 .card-atividade.integrado > .card-pontos-tipo { z-index:3; }
+/* No celular, uma faixa animada substitui as múltiplas camadas de blur. */
+@media (pointer:coarse) {
+ .card-atividade.integrado {
+  --paleta-card-movel:linear-gradient(110deg,rgb(var(--cor-matematica)),rgb(var(--cor-itinerario)),rgb(var(--cor-linguagens)),rgb(var(--cor-humanas)),rgb(var(--cor-natureza)),rgb(var(--cor-matematica)));
+  animation:movimento-paleta-evento 6s ease-in-out infinite alternate;
+ }
+ .card-atividade.integrado :is(.fundo-evento,.brilho-evento,.fundo-letras) {
+  background-image:var(--paleta-card-movel) !important;
+  background-size:180% 100% !important;
+  background-position:var(--posicao-faixa-evento) 50% !important;
+ }
+ .card-atividade.integrado :is(.fundo-evento,.brilho-evento,.fundo-letras)::before,
+ .card-atividade.integrado :is(.fundo-evento,.brilho-evento,.fundo-letras)::after { content:none !important; }
+ .card-atividade.integrado :is(.fundo-evento,.brilho-evento,.fundo-letras) :is(.blob-itin,.blob-hum,.blob-nat) { display:none !important; animation:none !important; }
+ .card-atividade.integrado > .brilho-evento { filter:blur(6px); opacity:.5; }
+}
 
 /* ── PORTAL-1: pseudo-elements ── */
 .card-atividade :is(.fundo-evento, .brilho-evento, .fundo-letras)::before,
