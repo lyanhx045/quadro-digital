@@ -7509,21 +7509,29 @@ body { width:100%; max-width:100%; }
 .card-atividade.integrado > :is(.card-materia,.card-prof,.card-detalhes,.lista-anexos-card) { z-index:2; }
 .card-atividade.integrado > .tag-tipo,
 .card-atividade.integrado > .card-pontos-tipo { z-index:3; }
-/* No celular, uma faixa animada substitui as múltiplas camadas de blur. */
-@media (pointer:coarse) {
- .card-atividade.integrado {
-  --paleta-card-movel:linear-gradient(110deg,rgb(var(--cor-matematica)),rgb(var(--cor-itinerario)),rgb(var(--cor-linguagens)),rgb(var(--cor-humanas)),rgb(var(--cor-natureza)),rgb(var(--cor-matematica)));
-  animation:movimento-paleta-evento 6s ease-in-out infinite alternate;
- }
- .card-atividade.integrado :is(.fundo-evento,.brilho-evento,.fundo-letras) {
-  background-image:var(--paleta-card-movel) !important;
-  background-size:180% 100% !important;
-  background-position:var(--posicao-faixa-evento) 50% !important;
- }
- .card-atividade.integrado :is(.fundo-evento,.brilho-evento,.fundo-letras)::before,
- .card-atividade.integrado :is(.fundo-evento,.brilho-evento,.fundo-letras)::after { content:none !important; }
- .card-atividade.integrado :is(.fundo-evento,.brilho-evento,.fundo-letras) :is(.blob-itin,.blob-hum,.blob-nat) { display:none !important; animation:none !important; }
- .card-atividade.integrado > .brilho-evento { filter:blur(6px); opacity:.5; }
+
+
+/* Mesma composição e movimentos do Portal SESI, com bordas suaves
+   desenhadas no gradiente de cada mancha em vez de filtros individuais. */
+.card-atividade :is(.fundo-evento,.brilho-evento,.fundo-letras) { background-color:rgb(120,35,28); background-image:none; }
+.card-atividade :is(.fundo-evento,.brilho-evento,.fundo-letras)::before { --mancha-integrada:var(--cor-matematica); }
+.card-atividade :is(.fundo-evento,.brilho-evento,.fundo-letras)::after { --mancha-integrada:var(--cor-linguagens); }
+.card-atividade :is(.fundo-evento,.brilho-evento,.fundo-letras) .blob-itin { --mancha-integrada:var(--cor-itinerario); }
+.card-atividade :is(.fundo-evento,.brilho-evento,.fundo-letras) .blob-hum { --mancha-integrada:var(--cor-humanas); }
+.card-atividade :is(.fundo-evento,.brilho-evento,.fundo-letras) .blob-nat { --mancha-integrada:var(--cor-natureza); }
+.card-atividade :is(.fundo-evento,.brilho-evento,.fundo-letras)::before,
+.card-atividade :is(.fundo-evento,.brilho-evento,.fundo-letras)::after,
+.card-atividade :is(.fundo-evento,.brilho-evento,.fundo-letras) :is(.blob-itin,.blob-hum,.blob-nat) {
+ filter:none !important;
+ background:radial-gradient(ellipse closest-side,rgb(var(--mancha-integrada)) 55%,rgba(var(--mancha-integrada),.92) 68%,rgba(var(--mancha-integrada),.55) 82%,rgba(var(--mancha-integrada),.15) 94%,rgba(var(--mancha-integrada),0) 100%) !important;
+}
+
+.card-atividade :is(.fundo-evento,.fundo-letras) { isolation:isolate; }
+
+/* Letras separadas, incluindo controles, guias e pseudo-elementos. */
+*, *::before, *::after {
+ font-variant-ligatures:none !important;
+ font-feature-settings:"liga" 0,"clig" 0,"dlig" 0,"hlig" 0 !important;
 }
 
 /* ── PORTAL-1: pseudo-elements ── */
@@ -7985,3 +7993,25 @@ body { width:100%; max-width:100%; }
   transition-property: color, background-color, text-shadow, outline-color;
 }
 .campo-disciplina { --tom-area: rgb(var(--cor-matematica)); } #seletor-disciplina-trilha { pointer-events:none; }
+/* Mesma composição e movimentos do Portal SESI, com bordas suaves
+   desenhadas no gradiente de cada mancha em vez de filtros individuais. */
+.card-atividade :is(.fundo-evento,.brilho-evento,.fundo-letras) { background-color:rgb(120,35,28); background-image:none; }
+.card-atividade :is(.fundo-evento,.brilho-evento,.fundo-letras)::before { --mancha-integrada:var(--cor-matematica); }
+.card-atividade :is(.fundo-evento,.brilho-evento,.fundo-letras)::after { --mancha-integrada:var(--cor-linguagens); }
+.card-atividade :is(.fundo-evento,.brilho-evento,.fundo-letras) .blob-itin { --mancha-integrada:var(--cor-itinerario); }
+.card-atividade :is(.fundo-evento,.brilho-evento,.fundo-letras) .blob-hum { --mancha-integrada:var(--cor-humanas); }
+.card-atividade :is(.fundo-evento,.brilho-evento,.fundo-letras) .blob-nat { --mancha-integrada:var(--cor-natureza); }
+.card-atividade :is(.fundo-evento,.brilho-evento,.fundo-letras)::before,
+.card-atividade :is(.fundo-evento,.brilho-evento,.fundo-letras)::after,
+.card-atividade :is(.fundo-evento,.brilho-evento,.fundo-letras) :is(.blob-itin,.blob-hum,.blob-nat) {
+ filter:none !important;
+ background:radial-gradient(ellipse closest-side,rgb(var(--mancha-integrada)) 55%,rgba(var(--mancha-integrada),.92) 68%,rgba(var(--mancha-integrada),.55) 82%,rgba(var(--mancha-integrada),.15) 94%,rgba(var(--mancha-integrada),0) 100%) !important;
+}
+
+.card-atividade :is(.fundo-evento,.fundo-letras) { isolation:isolate; }
+
+/* Letras separadas, incluindo controles, guias e pseudo-elementos. */
+*, *::before, *::after {
+ font-variant-ligatures:none !important;
+ font-feature-settings:"liga" 0,"clig" 0,"dlig" 0,"hlig" 0 !important;
+}

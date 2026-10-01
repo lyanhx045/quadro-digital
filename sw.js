@@ -1,9 +1,9 @@
-const CACHE = 'quadro-2026-09-30-3568072472a9';
+const CACHE = 'quadro-2026-09-30-e7add56043a5';
 
 const ARQUIVOS_OFFLINE = [
   '/index.html',
-  '/index.css?v=3568072472a9',
-  '/index.js?v=3568072472a9',
+  '/index.css?v=e7add56043a5',
+  '/index.js?v=e7add56043a5',
   '/manifest.json',
   '/icons/notificacao-192.png',
   '/anexos-guia/conteudo.pptx',

@@ -7924,8 +7924,11 @@ const guiaSala = (() => {
     ctx.globalCompositeOperation='source-over';
     ctx.font=`${estilo.fontStyle} ${estilo.fontWeight} ${estilo.fontSize} ${estilo.fontFamily}`;
     const espaco=w-parseFloat(estilo.paddingLeft)-parseFloat(estilo.paddingRight);
-    let texto=el.textContent.trim();if(ctx.measureText(texto).width>espaco){while(texto.length&&ctx.measureText(texto+'…').width>espaco)texto=texto.slice(0,-1);texto+='…';}
-    ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(texto,w/2,h/2);
+    // Canvas não herda font-variant-ligatures do CSS: desenha os glifos separados.
+    const medir=texto=>Array.from(texto).reduce((total,letra)=>total+ctx.measureText(letra).width,0);
+    let texto=el.textContent.trim();if(medir(texto)>espaco){while(texto.length&&medir(texto+'…')>espaco)texto=texto.slice(0,-1);texto+='…';}
+    ctx.textAlign='left';ctx.textBaseline='middle';let x=(w-medir(texto))/2;
+    for(const letra of Array.from(texto)){ctx.fillText(letra,x,h/2);x+=ctx.measureText(letra).width;}
     el.style.setProperty('--mascara-evento',`url("${canvas.toDataURL()}")`);
     mascaras.set(el,chave);
     }
@@ -7952,9 +7955,12 @@ const guiaSala = (() => {
       fundo.getAnimations({subtree:true}).forEach(a=>{if(tempos.has(a.animationName))a.currentTime=tempos.get(a.animationName);});
     });
   }
-  const resize=new ResizeObserver(entries=>entries.forEach(e=>desenhar(e.target)));
+  const resize=new ResizeObserver(entries=>entries.forEach(e=>{
+    if(e.target.matches('.card-atividade'))e.target.querySelectorAll('.card-titulo').forEach(desenhar);
+    else desenhar(e.target);
+  }));
   const atualizar=()=>document.querySelectorAll('.card-atividade .card-titulo').forEach(el=>{
-    if(vistos.has(el))return;vistos.add(el);resize.observe(el);
+    if(vistos.has(el))return;vistos.add(el);resize.observe(el);resize.observe(el.closest('.card-atividade'));
     new MutationObserver(()=>desenhar(el)).observe(el.closest('.card-atividade'),{attributes:true,attributeFilter:['class']});
     new MutationObserver(()=>desenhar(el)).observe(el,{childList:true,characterData:true,subtree:true});
     desenhar(el);document.fonts.ready.then(()=>desenhar(el));
