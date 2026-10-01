@@ -6894,7 +6894,7 @@ const guiaSala = (() => {
         return card || painel;
       }, texto: () => '<p>Clique no título para abrir ou fechar. Se houver anexos, abra-os pelo próprio card.</p>' },
     { aba: 'bnt-proximo', titulo: 'Atividades próximas', alvos: ['#painel-atividades-proximas'], botao: '#bnt-proximo',
-      texto: () => '<p>A lista reúne atividades a partir de hoje, com as datas mais próximas primeiro.</p><p>Na mesma data: <strong>Evento → Prova → Teste → Projeto → Tarefa.</strong> Se ainda houver empate, vale o título em ordem alfabética.</p>' },
+      texto: () => '<p>A lista reúne atividades a partir de hoje, com as datas mais próximas primeiro.</p><p>Na mesma data: <strong>Prova → Teste → Projeto → Tarefa.</strong> Se ainda houver empate, vale o título em ordem alfabética.</p>' },
     { aba: 'btn-material', titulo: 'Carga horária', preparar: estado => prepararMaterial('material-horario', estado),
       texto: () => '<p>Confira a sequência de aulas de cada dia útil, com a aula e o professor correspondente.</p>' },
     { aba: 'btn-material', titulo: 'Drives e pastas', preparar: estado => prepararMaterial('material-drive', estado),
