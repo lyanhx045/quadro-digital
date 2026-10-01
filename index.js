@@ -7906,10 +7906,14 @@ const guiaSala = (() => {
 // Recorte real: as letras revelam o fundo animado que passa atrás do título.
 (() => {
   const vistos=new WeakSet();
+  const mascaras=new WeakMap();
   function desenhar(el) {
     if(!el.closest('.integrado')) {el.classList.remove('evento-recorte');el.querySelector(':scope > .janela-letras')?.remove();return;}
     const w=el.clientWidth,h=el.clientHeight;if(!w||!h)return;
-    const estilo=getComputedStyle(el),canvas=document.createElement('canvas'),dpr=devicePixelRatio||1;
+    const estilo=getComputedStyle(el),dpr=devicePixelRatio||1;
+    const chave=[w,h,dpr,el.textContent.trim(),estilo.fontStyle,estilo.fontWeight,estilo.fontSize,estilo.fontFamily,estilo.paddingLeft,estilo.paddingRight].join('|');
+    if(mascaras.get(el)!==chave) {
+    const canvas=document.createElement('canvas');
     canvas.width=Math.ceil(w*dpr);canvas.height=Math.ceil(h*dpr);
     const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.fillStyle='#fff';
     ctx.globalCompositeOperation='source-over';
@@ -7918,7 +7922,9 @@ const guiaSala = (() => {
     let texto=el.textContent.trim();if(ctx.measureText(texto).width>espaco){while(texto.length&&ctx.measureText(texto+'…').width>espaco)texto=texto.slice(0,-1);texto+='…';}
     ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(texto,w/2,h/2);
     el.style.setProperty('--mascara-evento',`url("${canvas.toDataURL()}")`);
-    el.classList.add('evento-recorte');
+    mascaras.set(el,chave);
+    }
+    if(!el.classList.contains('evento-recorte'))el.classList.add('evento-recorte');
     let janela=el.querySelector(':scope > .janela-letras');
     if(!janela){
       janela=document.createElement('span');janela.className='janela-letras';janela.setAttribute('aria-hidden','true');

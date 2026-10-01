@@ -7503,6 +7503,12 @@ body { width:100%; max-width:100%; }
 .lista-atividades-proximas .card-fora-da-lista *::after { animation-play-state:paused !important; }
 
 .card-atividade.integrado > .card-titulo { position:absolute; z-index:9; }
+/* Evita camadas negativas de filtros no compositor móvel. */
+.card-atividade.integrado > .brilho-evento { z-index:0; }
+.card-atividade.integrado > .fundo-evento { z-index:1; }
+.card-atividade.integrado > :is(.card-materia,.card-prof,.card-detalhes,.lista-anexos-card) { z-index:2; }
+.card-atividade.integrado > .tag-tipo,
+.card-atividade.integrado > .card-pontos-tipo { z-index:3; }
 
 /* ── PORTAL-1: pseudo-elements ── */
 .card-atividade :is(.fundo-evento, .brilho-evento, .fundo-letras)::before,
