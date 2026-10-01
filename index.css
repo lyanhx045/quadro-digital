@@ -7486,6 +7486,22 @@ body:has(#guia-sala) #modal-manual-overlay .manual-config-item-notificacoes {
 html { overflow:clip; }
 body { width:100%; max-width:100%; }
 .conteudo-tipo { width:100%; max-width:100%; height:100dvh; overflow:clip; }
+/* Mantém o fundo no próprio card durante a composição da rolagem móvel. */
+.card-atividade.integrado > .fundo-evento { z-index:0; }
+.card-atividade.integrado > .brilho-evento { z-index:-1; }
+.card-atividade.integrado > :is(.card-materia,.card-prof,.card-detalhes,.lista-anexos-card) { position:relative; z-index:1; }
+.card-atividade.integrado > .tag-tipo { position:absolute; }
+.card-atividade.integrado > .card-pontos-tipo { position:absolute; }
+.card-atividade :is(.fundo-evento, .brilho-evento, .fundo-letras),
+.card-atividade :is(.fundo-evento, .brilho-evento, .fundo-letras) * { transition:none; }
+.lista-atividades-proximas { isolation:isolate; overscroll-behavior:contain; }
+.lista-atividades-proximas { contain:paint; }
+.lista-atividades-proximas .card-fora-da-lista,
+.lista-atividades-proximas .card-fora-da-lista *,
+.lista-atividades-proximas .card-fora-da-lista *::before,
+.lista-atividades-proximas .card-fora-da-lista *::after { animation-play-state:paused !important; }
+.lista-atividades-proximas .card-fora-da-lista > :is(.fundo-evento,.brilho-evento) { visibility:hidden; }
+.card-atividade.integrado > .card-titulo { position:absolute; z-index:9; }
 
 /* ── PORTAL-1: pseudo-elements ── */
 .card-atividade :is(.fundo-evento, .brilho-evento, .fundo-letras)::before,
