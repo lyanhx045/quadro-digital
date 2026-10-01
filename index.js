@@ -6894,7 +6894,7 @@ const guiaSala = (() => {
         return card || painel;
       }, texto: () => '<p>Clique no título para abrir ou fechar. Se houver anexos, abra-os pelo próprio card.</p>' },
     { aba: 'bnt-proximo', titulo: 'Atividades próximas', alvos: ['#painel-atividades-proximas'], botao: '#bnt-proximo',
-      texto: () => '<p>A lista reúne atividades a partir de hoje, com as datas mais próximas primeiro.</p><p>Na mesma data: <strong>Prova → Teste → Projeto → Tarefa.</strong> Se ainda houver empate, vale o título em ordem alfabética.</p>' },
+      texto: () => '<p>A lista reúne atividades a partir de hoje, com as datas mais próximas primeiro.</p>' },
     { aba: 'btn-material', titulo: 'Carga horária', preparar: estado => prepararMaterial('material-horario', estado),
       texto: () => '<p>Confira a sequência de aulas de cada dia útil, com a aula e o professor correspondente.</p>' },
     { aba: 'btn-material', titulo: 'Drives e pastas', preparar: estado => prepararMaterial('material-drive', estado),
@@ -7522,7 +7522,7 @@ const guiaSala = (() => {
     voltar.setAttribute('aria-hidden', String(primeira));
     const proximo = estado.cartao.querySelector('.guia-proximo');
     proximo.setAttribute('aria-label', etapa.final ? 'Começar a usar o site' : 'Próxima etapa');
-    proximo.title = etapa.final ? 'Começar' : 'Próxima etapa';
+    proximo.removeAttribute('title');
     proximo.hidden = Boolean(estado.indice === 2 && estado.conviteDia || etapa.notificacoes && !notificacoesAtivas());
     estado.cartao.querySelector('.guia-acoes').hidden = !etapa.notificacoes || notificacoesAtivas();
     const ativar = estado.cartao.querySelector('.guia-ativar');
@@ -7693,7 +7693,7 @@ const guiaSala = (() => {
     dialogo.setAttribute('aria-describedby', 'guia-sala-texto');
     dialogo.innerHTML = `<div class="guia-fundo"></div><section class="guia-cartao" style="visibility:hidden">
       <header class="guia-cabecalho">
-        <button type="button" class="guia-pular fechar" aria-label="Pular guia" title="Pular guia"><svg class="icone-fechar" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+        <button type="button" class="guia-pular fechar" aria-label="Pular guia"><svg class="icone-fechar" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
         <h2 class="guia-titulo" id="guia-sala-titulo" tabindex="-1"></h2>
       </header>
       <div class="guia-barra" role="progressbar" aria-label="Progresso do guia" aria-valuemin="0" aria-valuemax="${etapas.length}" aria-valuenow="1"><span class="guia-barra-preenchimento"></span></div>
@@ -7702,8 +7702,8 @@ const guiaSala = (() => {
         <button type="button" class="guia-ativar">ativar notificações</button>
         <button type="button" class="guia-agora-nao">agora não</button>
       </div><div class="guia-navegacao">
-        <button type="button" class="guia-voltar modal-confirmacao-cancelar" aria-label="Etapa anterior" title="Etapa anterior">${icone('m15 18-6-6 6-6')}</button>
-        <button type="button" class="guia-proximo modal-confirmacao-confirmar" aria-label="Próxima etapa" title="Próxima etapa">${icone('M9 18 L15 12 L9 6')}</button>
+        <button type="button" class="guia-voltar modal-confirmacao-cancelar" aria-label="Etapa anterior">${icone('m15 18-6-6 6-6')}</button>
+        <button type="button" class="guia-proximo modal-confirmacao-confirmar" aria-label="Próxima etapa">${icone('M9 18 L15 12 L9 6')}</button>
       </div></div>
     </section>`;
     document.body.appendChild(dialogo);
