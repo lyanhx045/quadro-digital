@@ -1143,7 +1143,7 @@ const server = http.createServer(async (req, res) => {
       const salaId = u.searchParams.get('sala_id');
       let query = supabase
         .from('grade_aulas')
-        .select('dia_semana, posicao, professor_id, area, professores(nome)')
+        .select('sala_id, dia_semana, posicao, professor_id, area, professores(nome), salas(nome)')
         .order('dia_semana')
         .order('posicao');
       if (salaId) query = query.eq('sala_id', parseInt(salaId, 10));
@@ -1154,6 +1154,8 @@ const server = http.createServer(async (req, res) => {
       }
       // Resolve professor_id → professor (nome) para compatibilidade com o front-end
       const resultado = (data || []).map(r => ({
+        sala_id:      r.sala_id,
+        sala_nome:    r.salas?.nome ?? null,
         dia_semana:   r.dia_semana,
         posicao:      r.posicao,
         area:         r.area,
