@@ -1,6 +1,8 @@
-const CACHE = 'quadro-professores-92a3724765f9';
+const CACHE = 'quadro-adicoes-44ca9675c3a5';
 
 const ARQUIVOS_OFFLINE = [
+  '/mencoes-atividades.css?v=44ca9675c3a5',
+  '/mencoes-atividades.js?v=44ca9675c3a5',
   '/horario-professores.css?v=92a3724765f9',
   '/horario-professores.js?v=92a3724765f9',
   '/index.html',
