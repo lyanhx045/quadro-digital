@@ -1,4 +1,4 @@
-const CACHE = 'quadro-adicoes-44ca9675c3a5';
+const CACHE = 'quadro-tela-f63214007d5e';
 
 const ARQUIVOS_OFFLINE = [
   '/mencoes-atividades.css?v=44ca9675c3a5',
