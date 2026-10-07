@@ -1,6 +1,7 @@
-const CACHE = 'quadro-tela-f63214007d5e';
+const CACHE = 'quadro-links-931c86ddd7a0';
 
 const ARQUIVOS_OFFLINE = [
+  '/navegacao-links.js?v=931c86ddd7a0',
   '/mencoes-atividades.css?v=44ca9675c3a5',
   '/mencoes-atividades.js?v=44ca9675c3a5',
   '/horario-professores.css?v=92a3724765f9',
@@ -218,3 +219,4 @@ self.addEventListener('fetch', event => {
     })
   );
 });
+
