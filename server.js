@@ -732,7 +732,7 @@ function servirArquivoEstatico(req, res) {
 
   let urlPath = req.url === '/' ? '/index.html' : req.url;
   urlPath = urlPath.split('?')[0];
-  if(/^\/(?:calendario|atividades-proximas|carga-horaria|drives|plataformas|configuracoes)(?:-[a-zA-Z0-9-]+)?\/?$/.test(urlPath))urlPath='/index.html';
+  if(/^\/(?:material|calendario|atividades-proximas|carga-horaria|drives|plataformas|configuracoes)(?:-[a-zA-Z0-9-]+)?\/?$/.test(urlPath))urlPath='/index.html';
 
   if (urlPath === '/robots.txt') {
     return servirRobotsTxt(req, res);
@@ -1865,3 +1865,4 @@ server.listen(PORT, () => {
     console.warn('[notificacoes] Configure VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY no Render.');
   }
 });
+

@@ -1,7 +1,7 @@
-const CACHE = 'quadro-links-931c86ddd7a0';
+const CACHE = 'quadro-links-f63ce9de23ed';
 
 const ARQUIVOS_OFFLINE = [
-  '/navegacao-links.js?v=931c86ddd7a0',
+  '/navegacao-links.js?v=f63ce9de23ed',
   '/mencoes-atividades.css?v=44ca9675c3a5',
   '/mencoes-atividades.js?v=44ca9675c3a5',
   '/horario-professores.css?v=92a3724765f9',
@@ -219,4 +219,5 @@ self.addEventListener('fetch', event => {
     })
   );
 });
+
 
