@@ -171,7 +171,7 @@ function restringirQueryASala(query, req) {
 }
 
 // Matérias do seletor do formulário
-const MATERIAS = ['MATEMÁTICA', 'ITINERÁRIO', 'LINGUAGENS', 'HUMANAS', 'NATUREZA'];
+const MATERIAS = ['MATEMÁTICA', 'ITINERÁRIO', 'LINGUAGENS', 'HUMANAS', 'NATUREZA', 'INTEGRADO'];
 
 // Converte data do formulário (dd/mm/aaaa) para ISO (aaaa-mm-dd) antes de salvar
 function converterDataBrParaIso(d, m, a) {
@@ -1865,4 +1865,5 @@ server.listen(PORT, () => {
     console.warn('[notificacoes] Configure VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY no Render.');
   }
 });
+
 

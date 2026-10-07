@@ -1,4 +1,4 @@
-const CACHE = 'quadro-links-f63ce9de23ed';
+const CACHE = 'quadro-integrado-bd2adebe15be';
 
 const ARQUIVOS_OFFLINE = [
   '/navegacao-links.js?v=f63ce9de23ed',
@@ -7,7 +7,7 @@ const ARQUIVOS_OFFLINE = [
   '/horario-professores.css?v=92a3724765f9',
   '/horario-professores.js?v=92a3724765f9',
   '/index.html',
-  '/index.css?v=e7add56043a5',
+  '/index.css?v=bd2adebe15be',
   '/index.js?v=e7add56043a5',
   '/manifest.json',
   '/icons/notificacao-192.png',
@@ -219,5 +219,6 @@ self.addEventListener('fetch', event => {
     })
   );
 });
+
 
 

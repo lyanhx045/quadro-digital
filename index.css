@@ -8015,3 +8015,16 @@ body { width:100%; max-width:100%; }
  font-variant-ligatures:none !important;
  font-feature-settings:"liga" 0,"clig" 0,"dlig" 0,"hlig" 0 !important;
 }
+/* Conhecimentos ausentes ou não reconhecidos mantêm um card legível. */
+.card-atividade:not(.matematica,.itinerario,.linguagens,.humanas,.natureza,.integrado) {
+  --cor-area: 128, 136, 145;
+  background: rgb(var(--cor-area));
+  box-shadow: 0 0 10px rgba(var(--cor-area), .75);
+}
+.card-drive:not(.drive-matematica,.drive-itinerario,.drive-linguagens,.drive-humanas,.drive-natureza,.drive-integrado) {
+  --cor-area-drive: 128, 136, 145;
+}
+.card-drive:not(.drive-matematica,.drive-itinerario,.drive-linguagens,.drive-humanas,.drive-natureza,.drive-integrado) .area-drive {
+  background: rgb(var(--cor-area-drive));
+  box-shadow: 0 0 calc(1.75 * var(--valor-vh)) rgba(var(--cor-area-drive), .6);
+}
