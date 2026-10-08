@@ -1,8 +1,8 @@
-const CACHE = 'quadro-halloween-7ef41223a629';
+const CACHE = 'quadro-halloween-05a13252ba4a';
 
 const ARQUIVOS_OFFLINE = [
-  '/halloween-atividade.css?v=7ef41223a629',
-  '/halloween-atividade.js?v=7ef41223a629',
+  '/halloween-atividade.css?v=05a13252ba4a',
+  '/halloween-atividade.js?v=05a13252ba4a',
   '/navegacao-links.js?v=f63ce9de23ed',
   '/mencoes-atividades.css?v=44ca9675c3a5',
   '/mencoes-atividades.js?v=44ca9675c3a5',
