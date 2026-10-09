@@ -1439,6 +1439,8 @@ const diasSemanaAbrev = ['D','S','T','Q','Q','S','S'];
 const normalizarTexto = (t) =>
   t ? t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim() : '';
 
+function _contarCaracteresUteis(texto,ignorarComandos=false){let valor=String(texto||'');if(ignorarComandos)valor=valor.replace(/!(?:halloween|minecraft)\b/gi,'');return valor.replace(/\s/g,'').length;}
+
 function formatarTextoDescricao(texto) {
   if (!texto || typeof texto !== 'string') return '';
   let s = texto
@@ -3490,7 +3492,7 @@ function _inicializarLogicaFormulario(itemEdicao) {
       const d = descEl.querySelector('#entrada-detalhes');
       const b = descEl.querySelector('#botao-anexar-arquivo');
       const temArq = (state.arquivos[idx] || []).length > 0;
-      const temTxt = (t && t.value.trim().length > 0) || (d && d.value.trim().length > 0);
+      const temTxt = (t && t.value.trim().length > 0) || (d && _contarCaracteresUteis(d.value,true) > 0);
       if (b) { b.classList.toggle('tem-descricao', temTxt || temArq); b.classList.toggle('tem-arquivos', temArq); }
     }
 
@@ -3833,8 +3835,8 @@ function _inicializarLogicaFormulario(itemEdicao) {
         const t = secao.querySelector('#entrada-titulo');
         const det = secao.querySelector('#entrada-detalhes');
         let secErr = false;
-        if (t.value.trim().length < 5) { t.classList.add('erro-envio'); secErr = true; }
-        if (det.value.trim().length < 10) { det.classList.add('erro-envio'); secErr = true; }
+        if (_contarCaracteresUteis(t.value) < 5) { t.classList.add('erro-envio'); secErr = true; }
+        if (_contarCaracteresUteis(det.value,true) < 10) { det.classList.add('erro-envio'); secErr = true; }
         secao.classList.toggle('erro-envio', secErr);
         if (secErr) ok = false;
       });
@@ -4769,7 +4771,7 @@ function _vincularPreviaManual(overlay) {
     const detInput = blocoAtivo ? blocoAtivo.querySelector('#entrada-detalhes') : null;
     const detVal = detInput ? detInput.value.trim() : '';
     if (detalhesEl) {
-      if (detVal) {
+      if (_contarCaracteresUteis(detVal,true)>0) {
         detalhesEl.innerHTML = formatarTextoDescricao(detVal);
         detalhesEl.style.opacity = '';
         detalhesEl.style.fontStyle = '';
@@ -4780,6 +4782,8 @@ function _vincularPreviaManual(overlay) {
       }
     }
 
+    window._aplicarHalloweenPrevia?.(card,detVal);
+    window._aplicarMinecraftPrevia?.(card,detVal);
     // Anexos — exibe os arquivos do bloco ativo no card preview
     let anexosPrevia = card.querySelector('.lista-anexos-card');
     const arquivosAtivos = formState ? (formState.arquivos[idxAtivo] || []) : [];

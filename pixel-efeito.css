@@ -1,0 +1,2 @@
+#pixel-live-defs{position:fixed;width:0;height:0;pointer-events:none;overflow:hidden}
+#pixel-live-overlay{position:fixed;inset:0;z-index:2147482000;pointer-events:none!important;backdrop-filter:url(#pixel-live-fancy);-webkit-backdrop-filter:url(#pixel-live-fancy)}

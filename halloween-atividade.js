@@ -86,11 +86,24 @@ ajustarFioMarcado();
   const teia=document.createElement('span');teia.className='decoracao-teia';teia.setAttribute('aria-hidden','true');teia.innerHTML=HW_CONFIG.teia;card.append(teia);requestAnimationFrame(()=>{if(card.isConnected)prepararTeia(card,teia);});
   let abrindo=false;
   const titulo=card.querySelector('.card-titulo');titulo.addEventListener('click',()=>{abrindo=!card.classList.contains('aberto');},true);
-  titulo.addEventListener('click',()=>{if(abrindo){abertos.add(card);atualizarTema();mostrarFantasma(card);}else{abertos.delete(card);fecharFantasma();atualizarTema();}});
+  titulo.addEventListener('click',()=>{if(!card.classList.contains('hw-mistura'))return;if(abrindo){abertos.add(card);atualizarTema();mostrarFantasma(card);}else{abertos.delete(card);fecharFantasma();atualizarTema();}});
   const pontos=[...card.querySelectorAll('.card-pontos-tipo>div')],timers=[];animacoesPontos.set(card,timers);
-  for(const ponto of pontos){const piscar=()=>{if(!card.isConnected)return;const aceso=Math.random()>.4;ponto.style.backgroundColor=aceso?'var(--cor-mais-clara)':'var(--cor-escura)';ponto.style.boxShadow=aceso?'0 0 5px var(--cor-clara)':'none';timers.push(setTimeout(piscar,450+Math.random()*1150));if(timers.length>12)timers.splice(0,timers.length-12);};timers.push(setTimeout(piscar,0));}
+  for(const ponto of pontos){const piscar=()=>{if(!card.isConnected)return;if(card.classList.contains('hw-mistura')){const aceso=Math.random()>.4;ponto.style.backgroundColor=aceso?'var(--cor-mais-clara)':'var(--cor-escura)';ponto.style.boxShadow=aceso?'0 0 5px var(--cor-clara)':'none';}timers.push(setTimeout(piscar,450+Math.random()*1150));if(timers.length>12)timers.splice(0,timers.length-12);};timers.push(setTimeout(piscar,0));}
   card.dataset.hwTema=atualizarTema()?'claro':'escuro';return card;
  }
+ window._aplicarHalloweenPrevia=function(card,texto){
+  if(!card)return;
+  if(especial({descricao_detalhes:texto})){
+   preparar(card,{descricao_detalhes:texto});
+   card.classList.remove('matematica','itinerario','linguagens','humanas','natureza','integrado','desconhecido');card.classList.add('humanas','hw-mistura');
+   card.querySelector('.card-materia').textContent='HALLOWEEN';card.querySelector('.card-prof').textContent='aviso';
+   const teia=card.querySelector('.decoracao-teia');if(teia)teia.style.display='';
+  }else if(preparados.has(card)){
+   card.classList.remove('hw-mistura');const teia=card.querySelector('.decoracao-teia');if(teia)teia.style.display='none';
+   card.querySelectorAll('.card-pontos-tipo>div').forEach(ponto=>{ponto.style.backgroundColor='';ponto.style.boxShadow='';});
+   if(abertos.delete(card)){fecharFantasma();atualizarTema();}
+  }
+ };
  const proximaOriginal=criarCardAtividadeProxima;criarCardAtividadeProxima=function(item){return preparar(proximaOriginal(item),item);};
  const diaOriginal=criarCardAtividadeDia;criarCardAtividadeDia=function(item){const resultado=diaOriginal(item);const cards=containerAtividades?.querySelectorAll('.card-atividade');preparar(cards?.[cards.length-1],item);return resultado;};
  function editor(input){const preview=input.parentElement?.querySelector('.preview-detalhes');if(!preview)return;const walker=document.createTreeWalker(preview,NodeFilter.SHOW_TEXT),textos=[];while(walker.nextNode())textos.push(walker.currentNode);for(const no of textos){if(no.parentElement.closest('.hw-comando'))continue;const re=/!halloween\b/gi,fragmento=document.createDocumentFragment();let m,ultimo=0,achou=false;while((m=re.exec(no.textContent))){achou=true;fragmento.append(document.createTextNode(no.textContent.slice(ultimo,m.index)));const span=document.createElement('span');span.className='hw-comando';span.textContent=m[0];fragmento.append(span);ultimo=m.index+m[0].length;}if(achou){fragmento.append(document.createTextNode(no.textContent.slice(ultimo)));no.replaceWith(fragmento);}}}
