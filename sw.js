@@ -1,4 +1,4 @@
-const CACHE = 'quadro-minecraft-14e5efcffb7e';
+const CACHE = 'quadro-minecraft-integrado-b23870f26a04';
 
 const ARQUIVOS_OFFLINE = [
   '/minecraft-texturas/tuff.png',
@@ -22,7 +22,7 @@ const ARQUIVOS_OFFLINE = [
   '/pixel-efeito.js?v=05a370d4de77',
   '/pixel-efeito.css?v=cdb0c3ec6864',
   '/minecraft-atividade.js?v=2cc7a7424e22',
-  '/minecraft-atividade.css?v=9edaf51fb67b',
+  '/minecraft-atividade.css?v=b23870f26a04',
   '/halloween-atividade.css?v=05a13252ba4a',
   '/halloween-atividade.js?v=bb4a90a3fea1',
   '/navegacao-links.js?v=f63ce9de23ed',
