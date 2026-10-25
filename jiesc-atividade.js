@@ -66,7 +66,15 @@ function rotuloPeriodoJiesc(item){
   input.setSelectionRange(proximo,proximo<end?proximo+1:proximo);input.dispatchEvent(new Event('input',{bubbles:true}));
  });
  const ns='http://www.w3.org/2000/svg';let seq=0,coresDias=[];
- function atualizarCorDia(d){const secundario=d.outros.length?d.outros[d.indice%d.outros.length]:d.base;d.cell.dataset.jiescTipos=d.base+','+secundario;d.stop?.style.setProperty('stop-color',`rgb(var(--cor-${secundario}-claro))`);d.cell.style.setProperty('--jiesc-brilho',`color-mix(in srgb, rgb(var(--cor-${d.base}-claro)) 50%, rgb(var(--cor-${secundario}-claro)))`);d.cell.style.setProperty('--jiesc-letra',`color-mix(in srgb, rgb(var(--cor-${d.base}-escuro)) 50%, rgb(var(--cor-${secundario}-escuro)))`);}
+ function atualizarCorDia(d){
+  const secundario=d.outros.length?d.outros[d.indice%d.outros.length]:d.base;
+  const sufixo=d.cell.classList.contains('inativo')?'-inativo':'';
+  const pesoBase=d.stop?.parentElement?.localName==='radialGradient'?15:50;
+  d.cell.dataset.jiescTipos=d.base+','+secundario;
+  d.stop?.style.setProperty('stop-color',`rgb(var(--jiesc-fundo-${secundario}))`);
+  d.cell.style.setProperty('--jiesc-brilho',`color-mix(in srgb, rgb(var(--jiesc-fundo-${d.base})) 50%, rgb(var(--jiesc-fundo-${secundario})))`);
+  d.cell.style.setProperty('--jiesc-letra',`color-mix(in srgb, rgb(var(--jiesc-texto-${d.base}${sufixo})) ${pesoBase}%, rgb(var(--jiesc-texto-${secundario}${sufixo})))`);
+ }
  setInterval(()=>{if(document.hidden)return;for(const d of coresDias){if(d.outros.length>1){d.indice++;atualizarCorDia(d);}}},3000);
  window.desenharFaixasJiesc=function(calendario){
   const grade=containerDias;if(!grade)return;grade.querySelector('.jiesc-faixas')?.remove();const anteriores=new Map(coresDias.map(d=>[d.cell.dataset.dataCompleta,d.indice]));coresDias=[];
@@ -82,21 +90,31 @@ function rotuloPeriodoJiesc(item){
   const svg=document.createElementNS(ns,'svg');svg.classList.add('jiesc-faixas');svg.setAttribute('aria-hidden','true');const defs=document.createElementNS(ns,'defs');svg.append(defs);grade.append(svg);
   const bounds=grade.getBoundingClientRect();svg.setAttribute('viewBox',`0 0 ${bounds.width} ${bounds.height}`);
   for(const indices of grupos){const first=cells[indices[0]].getBoundingClientRect(),last=cells[indices.at(-1)].getBoundingClientRect(),x=first.left-bounds.left,y=first.top-bounds.top,w=last.right-first.left,h=first.height;
-   const grad=document.createElementNS(ns,'linearGradient'),id='jiesc-grad-'+(++seq);grad.id=id;grad.setAttribute('x2','100%');
+   const grad=document.createElementNS(ns,'linearGradient'),id='jiesc-grad-'+(++seq),centros=[];grad.id=id;grad.setAttribute('x2','100%');
    for(const i of indices){
     const atividades=todosDados.filter(a=>atividadeNoDia(a,calendario[i].dataCompleta)&&visivel(a));
     const base=normalizarTexto(periodos.find(a=>atividadeNoDia(a,calendario[i].dataCompleta)).tipo);
     const outros=[...new Set(atividades.map(a=>normalizarTexto(a.tipo)))].filter(t=>t!==base&&['evento','prova','teste','tarefa','projeto'].includes(t));
     const r=cells[i].getBoundingClientRect(),centro=r.left+r.width/2-first.left;
-    const stop=(pos,tipo)=>{const el=document.createElementNS(ns,'stop');el.setAttribute('offset',Math.max(0,Math.min(1,pos/w)));el.style.stopColor=`rgb(var(--cor-${tipo}-claro))`;grad.append(el);return el;};
-    stop(centro-h/3,base);const variavel=stop(centro+h/3,base);
+    const stop=(pos,tipo)=>{const el=document.createElementNS(ns,'stop');el.setAttribute('offset',Math.max(0,Math.min(1,pos/w)));el.style.stopColor=`rgb(var(--jiesc-fundo-${tipo}))`;grad.append(el);return el;};
+    let variavel;
+    if(indices.length>1&&i===indices[0]){variavel=stop(centro-h/3,base);stop(centro+h/3,base);}
+    else if(indices.length>1&&i===indices.at(-1)){stop(centro-h/3,base);variavel=stop(centro+h/3,base);}
+    else{
+     stop(centro-h/2,base);stop(centro+h/2,base);
+     const radial=document.createElementNS(ns,'radialGradient'),radialId='jiesc-centro-'+(++seq);radial.id=radialId;
+     variavel=document.createElementNS(ns,'stop');variavel.setAttribute('offset','.15');
+     const borda=document.createElementNS(ns,'stop');borda.setAttribute('offset','1');borda.setAttribute('stop-opacity','0');borda.style.stopColor=`rgb(var(--jiesc-fundo-${base}))`;
+     radial.append(variavel,borda);defs.append(radial);
+     const foco=document.createElementNS(ns,'ellipse');for(const [k,v]of Object.entries({cx:x+centro,cy:y+h/2,rx:h*.9,ry:h*1.5,fill:`url(#${radialId})`}))foco.setAttribute(k,v);centros.push(foco);
+    }
     const d={cell:cells[i],base,outros,indice:anteriores.get(calendario[i].dataCompleta)||0,stop:variavel};coresDias.push(d);atualizarCorDia(d);
     // O ciclo comum não deve disputar a cor fixa do JIESC.
     cells[i].classList.remove('dia-com-multiplos-tipos');
    }
    defs.append(grad);
    if(!cells[indices[0]].classList.contains('inativo')){
-    const rect=document.createElementNS(ns,'rect');for(const [k,v]of Object.entries({x,y,width:w,height:h,rx:h/2,fill:`url(#${id})`}))rect.setAttribute(k,v);svg.append(rect);
+    const rect=document.createElementNS(ns,'rect');for(const [k,v]of Object.entries({x,y,width:w,height:h,rx:h/2,fill:`url(#${id})`}))rect.setAttribute(k,v);const brilho=rect.cloneNode();brilho.classList.add('jiesc-faixa-brilho');const recorte=document.createElementNS(ns,'clipPath');recorte.id=id+'-recorte';recorte.append(rect.cloneNode());defs.append(recorte);const focos=document.createElementNS(ns,'g');focos.setAttribute('clip-path',`url(#${recorte.id})`);focos.append(...centros);svg.append(brilho,rect,focos);
    }
   }
  };

@@ -2086,6 +2086,88 @@ function _cfgSafeInterp(a, b) {
 }
 
 /* ── Montagem do painel de configurações ── */
+// Durante a troca da paleta, só as propriedades visuais de cor usam um tempo comum.
+(() => {
+  const root=document.documentElement;
+  let fim=0;
+  const estilo=document.createElement('style');estilo.id='transicoes-cor-paleta';
+  const cores=['color','background-color','border-color','outline-color','fill','stroke','text-shadow','box-shadow','filter'];
+  const ajustes=new Map();
+  function completar(){
+    document.querySelectorAll('body,body *').forEach(el=>{
+      if(ajustes.has(el)||['SCRIPT','STYLE','LINK'].includes(el.tagName))return;
+      const s=getComputedStyle(el),props=s.transitionProperty.split(',').map(p=>p.trim()),tempos=s.transitionDuration.split(',').map(p=>p.trim());
+      const sincronizado=cores.every(cor=>{const i=props.lastIndexOf(cor);return i>=0&&tempos[i%tempos.length]==='0.3s';});
+      if(sincronizado)return;
+      const original=el.style.getPropertyValue('transition'),prioridade=el.style.getPropertyPriority('transition');
+      const valor=(s.transitionProperty==='none'?'':s.transition+', ')+cores.map(p=>p+' .3s ease').join(',');
+      el.style.setProperty('transition',valor,'important');ajustes.set(el,{original,prioridade,aplicado:el.style.getPropertyValue('transition')});
+    });
+  }
+  function restaurar(){ajustes.forEach((a,el)=>{if(el.style.getPropertyValue('transition')!==a.aplicado)return;if(a.original)el.style.setProperty('transition',a.original,a.prioridade);else el.style.removeProperty('transition');});ajustes.clear();}
+  new MutationObserver(()=>{if(root.hasAttribute('data-trocando-cor'))completar();}).observe(document.body,{childList:true,subtree:true});
+  function seletores(texto){let nivel=0,inicio=0;const partes=[];for(let i=0;i<texto.length;i++){if(texto[i]==='('||texto[i]==='[')nivel++;else if(texto[i]===')'||texto[i]===']')nivel--;else if(texto[i]===','&&!nivel){partes.push(texto.slice(inicio,i));inicio=i+1;}}partes.push(texto.slice(inicio));return partes;}
+  function regras(lista){return [...lista].map(regra=>{
+    if(regra.selectorText&&regra.style?.getPropertyValue('transition')){
+      const original=regra.style.getPropertyValue('transition');
+      const prioridade=regra.style.getPropertyPriority('transition')?' !important':'';
+      const seletor=seletores(regra.selectorText).map(s=>':root[data-trocando-cor] '+s.trim()).join(',');
+      return `${seletor}{transition:${original==='none'?'':original+', '}${cores.map(p=>p+' .3s ease').join(',')}${prioridade};}`;
+    }
+    if(regra.cssRules&&regra.conditionText)return `${regra.cssText.slice(0,regra.cssText.indexOf('{'))}{${regras(regra.cssRules)}}`;
+    return '';
+  }).join('\n');}
+  window._sincronizarTrocaCor=()=>{
+    if(!estilo.isConnected){estilo.textContent=[...document.styleSheets].map(sheet=>{try{return regras(sheet.cssRules);}catch{return '';}}).join('\n');document.head.append(estilo);}
+    root.dataset.trocandoCor='';clearTimeout(fim);completar();
+    fim=setTimeout(()=>{if(!root.dataset.paletaArcoiris){delete root.dataset.trocandoCor;restaurar();}},500);
+  };
+  document.addEventListener('click',e=>{if(e.target.closest?.('[id^="cfg-esfera-"]'))window._sincronizarTrocaCor();},true);
+})();
+
+// Easter egg da paleta: todas as cores, seguidas de três segundos de espera.
+(() => {
+  const visitadas = new Set();
+  let espera = 0, ciclo = 0;
+  const root = document.documentElement;
+  const rgb = (h, s, l) => {
+    const a = s * Math.min(l, 1 - l);
+    return [0, 8, 4].map(n => {
+      const k = (n + h / 30) % 12;
+      return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
+    });
+  };
+  document.addEventListener('click', e => {
+    const esfera = e.target.closest?.('[id^="cfg-esfera-"]');
+    if (!esfera) return;
+    clearTimeout(espera);
+    if (ciclo) {
+      clearInterval(ciclo); ciclo = 0; visitadas.clear();
+      delete root.dataset.paletaArcoiris;
+      return;
+    }
+    visitadas.add(esfera.id);
+    const esferas = [...document.querySelectorAll('[id^="cfg-esfera-"]')];
+    if (!esferas.length || !esferas.every(el => visitadas.has(el.id))) return;
+    espera = setTimeout(() => {
+      visitadas.clear(); root.dataset.paletaArcoiris = 'ativo';window._sincronizarTrocaCor();
+      const inicio = performance.now();
+      const estilo = getComputedStyle(root);
+      const origem = ['--cor-principal-escuro', '--cor-principal-claro'].map(nome => estilo.getPropertyValue(nome).split(',').map(Number));
+      const pintar = () => {
+        if (document.hidden) return;
+        const tempo = performance.now() - inicio, h = (tempo / 60) % 360;
+        const entrada = Math.min(1, tempo / 600);
+        const cores = [rgb(h, .78, .36), rgb(h, .85, .52)].map((cor, i) => cor.map((v, j) => Math.round(origem[i][j] + (v - origem[i][j]) * entrada)));
+        root.style.setProperty('--cor-principal-escuro', cores[0].join(', '));
+        root.style.setProperty('--cor-principal-claro', cores[1].join(', '));
+        window.atualizarCorCristal?.(cores[0], cores[1]);
+      };
+      pintar(); ciclo = setInterval(pintar, 80);
+    }, 3000);
+  });
+})();
+
 function montarPainelConfig() {
   const NS   = 'http://www.w3.org/2000/svg';
   const root = document.documentElement;
@@ -8083,7 +8165,10 @@ function navegarEntreMeses(dir) {
  const semanaAnterior=[...painel.querySelectorAll('.lista-cabecalho-semana li')].map(el=>el.textContent);
  const primeiroDiaAnterior=new Date(anoAtual,mesAtual,1).getDay();
  const antigos=[...painel.querySelectorAll('.grade-dias-mes li')].map(el=>{
-  const c=getComputedStyle(el);return {numero:el.querySelector('.numero-mes-transicao')?.textContent||el.textContent,backgroundColor:c.backgroundColor,color:c.color,boxShadow:c.boxShadow};
+  const numero=el.querySelector('.numero-mes-transicao'),c=getComputedStyle(el),texto=numero?getComputedStyle(numero):c;
+  const recorteTexto=texto.backgroundClip==='text'||texto.webkitBackgroundClip==='text';
+  // Nos dias inativos, o background pinta a letra, não a superfície do dia.
+  return {numero:numero?.textContent||el.textContent,backgroundColor:el.classList.contains('inativo')?'rgba(0, 0, 0, 0)':c.backgroundColor,color:recorteTexto?texto.backgroundColor:texto.color,boxShadow:c.boxShadow};
  });
  animacoesTrocaMes.forEach(a=>a.cancel());animacoesTrocaMes=[];
  navegarEntreMesesSemAnimacao(dir);

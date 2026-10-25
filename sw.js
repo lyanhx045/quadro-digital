@@ -1,8 +1,8 @@
-const CACHE = 'quadro-seta-cor-d35fc8647743';
+const CACHE = 'quadro-jiesc-tema-f9ac19acb904';
 
 const ARQUIVOS_OFFLINE = [
-  '/jiesc-atividade.css?v=7d65ac727d30',
-  '/jiesc-atividade.js?v=88ad1341236d',
+  '/jiesc-atividade.css?v=f9ac19acb904',
+  '/jiesc-atividade.js?v=918e44791593',
   '/minecraft-texturas/tuff.png',
   '/minecraft-texturas/stone_granite.png',
   '/minecraft-texturas/stone_andesite.png',
@@ -34,7 +34,7 @@ const ARQUIVOS_OFFLINE = [
   '/horario-professores.js?v=92a3724765f9',
   '/index.html',
   '/index.css?v=2f5b13ab7a3d',
-  '/index.js?v=9f534b9999af',
+  '/index.js?v=974084cd4335',
   '/manifest.json',
   '/icons/notificacao-192.png',
   '/anexos-guia/conteudo.pptx',
