@@ -105,3 +105,5 @@ to{opacity:0;transform:translateY(8px);}
 .entrada-data .numero-data-anterior {position:absolute;inset:0;pointer-events:none;background:none;border:0;outline:0;text-align:center;font:inherit;font-size:105%;color:rgb(var(--cor-letra));text-shadow:var(--text-shadow-letra);padding:0;height:100%;}
 .entrada-data #dia,.entrada-data #mes,.entrada-data #ano,.entrada-data .separador,.entrada-data .numero-data-anterior {font-size:100%;}
 .card-atividade .fundo-letras {transition:none !important;}
+#menu-interno #icone-seta-tipo {stroke:rgb(var(--cor-op, var(--cor-letra-apagada)));}
+#menu-externo[style*="--cor-op:"] #icone-seta-tipo {filter:url(#filtro-relevo-seta) drop-shadow(0 0 3px rgba(var(--cor-op),.3));}

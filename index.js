@@ -4784,6 +4784,7 @@ function _vincularPreviaManual(overlay) {
 
     window._aplicarHalloweenPrevia?.(card,detVal);
     window._aplicarMinecraftPrevia?.(card,detVal);
+    window._aplicarJiescPrevia?.(card,detVal);
     // Anexos — exibe os arquivos do bloco ativo no card preview
     let anexosPrevia = card.querySelector('.lista-anexos-card');
     const arquivosAtivos = formState ? (formState.arquivos[idxAtivo] || []) : [];
@@ -5841,7 +5842,8 @@ function atualizarCacheAtividadesProximas() {
       if (!item || !item.data) return false;
       const loc = normalizarTexto(item.local);
       if (loc !== 'casa' && loc !== 'sala') return false;
-      const t = converterDataBrParaDate(item.data).getTime();
+      const periodo=periodoJiesc(item);
+      const t = periodo ? (()=>{const fim=new Date(periodo.fim);return new Date(fim.getUTCFullYear(),fim.getUTCMonth(),fim.getUTCDate()).getTime();})() : converterDataBrParaDate(item.data).getTime();
       if (!Number.isFinite(t) || t < hoje) return false;
       // Provas têm autoridade maior: aparecem sempre, independente do filtro
       if (['evento','prova'].includes(normalizarTexto(item.tipo))) return true;
@@ -6097,7 +6099,7 @@ function obterClassesEAtributosDia(dia, mes, ano, _indiceAtividades) {
   const dataFormatada = formatarDataParaComparacao(dia, mes, ano);
   const atividadesDia = _indiceAtividades
     ? (_indiceAtividades[dataFormatada] || [])
-    : todosDados.filter(t => t.data === dataFormatada);
+    : todosDados.filter(t => atividadeNoDia(t,dataFormatada));
   const temCasa = _filtroExibicao.casa && atividadesDia.some(t => normalizarTexto(t.local) === 'casa');
   const temSala = _filtroExibicao.sala && atividadesDia.some(t => normalizarTexto(t.local) === 'sala');
   // Provas têm autoridade: marcam o dia mesmo que o local delas esteja fora do filtro
@@ -6146,7 +6148,14 @@ function gerarMarcacaoCompletaCalendario(ordemDias, infoMes) {
   const _indiceAtividades = Object.create(null);
   todosDados.forEach(t => {
     if (!t || !t.data) return;
-    (_indiceAtividades[t.data] = _indiceAtividades[t.data] || []).push(t);
+    const periodo=periodoJiesc(t);
+    if(!periodo){(_indiceAtividades[t.data] = _indiceAtividades[t.data] || []).push(t);return;}
+    // Indexa somente a janela visível, mesmo que o período dure anos.
+    for(let offset=-7;offset<43;offset++){
+      const dia=new Date(anoAtual,mesAtual,1+offset,12);
+      const chave=formatarDataParaComparacao(dia.getDate(),dia.getMonth(),dia.getFullYear());
+      if(atividadeNoDia(t,chave))(_indiceAtividades[chave]=_indiceAtividades[chave]||[]).push(t);
+    }
   });
 
   const anoAnt = mesAtual === 0  ? anoAtual - 1 : anoAtual;
@@ -6227,7 +6236,7 @@ function navegarEntreMesesSemAnimacao(dir) {
 
 // ── Painel do dia ────────────────────────────────────────
 function _escolherLocalInicial(dataStr) {
-  const itensDia = todosDados.filter(item => item.data === dataStr);
+  const itensDia = todosDados.filter(item => atividadeNoDia(item,dataStr));
   const eventoLocal=itensDia.find(item=>normalizarTexto(item.tipo)==='evento');
   if(eventoLocal)return normalizarTexto(eventoLocal.local);
   const temProvaSala = itensDia.some(item => ['evento','prova'].includes(normalizarTexto(item.tipo)) && normalizarTexto(item.local) === 'sala');
@@ -6269,7 +6278,7 @@ function renderizarListaAtividadesDia() {
   containerAtividades.innerHTML = '';
   const itens = todosDados.filter(item =>
     normalizarTexto(item.local) === normalizarTexto(opcaoSelecionadaLocal) &&
-    item.data === dataSelecionadaStr
+    atividadeNoDia(item,dataSelecionadaStr)
   );
   if (itens.length === 0) {
     containerAtividades.innerHTML = criarEstadoVazioHTML('atividades');

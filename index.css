@@ -1063,7 +1063,7 @@ body {
   background: rgb(var(--cor-branco-claro));
   padding: 10px;
   border-radius: 33px;
-  width: fit-content;
+  width: 319px;
   display: flex;
   flex-direction: column;
   gap: calc(0.75 * var(--valor-vh));
@@ -1225,6 +1225,8 @@ body {
    ============================================================ */
 .card-atividade {
   flex-shrink: 0;
+  /* Mantém a composição estável quando o título inicia/encerra o hover. */
+  will-change: transform;
   padding: 10px 13.5px 8.5px;
   border-radius: 20px;
   display: flex;

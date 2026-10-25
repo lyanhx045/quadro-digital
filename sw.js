@@ -1,6 +1,8 @@
-const CACHE = 'quadro-minecraft-integrado-b23870f26a04';
+const CACHE = 'quadro-seta-cor-d35fc8647743';
 
 const ARQUIVOS_OFFLINE = [
+  '/jiesc-atividade.css?v=7d65ac727d30',
+  '/jiesc-atividade.js?v=88ad1341236d',
   '/minecraft-texturas/tuff.png',
   '/minecraft-texturas/stone_granite.png',
   '/minecraft-texturas/stone_andesite.png',
@@ -26,13 +28,13 @@ const ARQUIVOS_OFFLINE = [
   '/halloween-atividade.css?v=05a13252ba4a',
   '/halloween-atividade.js?v=bb4a90a3fea1',
   '/navegacao-links.js?v=f63ce9de23ed',
-  '/mencoes-atividades.css?v=44ca9675c3a5',
+  '/mencoes-atividades.css?v=d35fc8647743',
   '/mencoes-atividades.js?v=44ca9675c3a5',
   '/horario-professores.css?v=92a3724765f9',
   '/horario-professores.js?v=92a3724765f9',
   '/index.html',
-  '/index.css?v=bd2adebe15be',
-  '/index.js?v=418d31bcf052',
+  '/index.css?v=2f5b13ab7a3d',
+  '/index.js?v=9f534b9999af',
   '/manifest.json',
   '/icons/notificacao-192.png',
   '/anexos-guia/conteudo.pptx',
