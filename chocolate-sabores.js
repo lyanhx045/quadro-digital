@@ -24,7 +24,7 @@
    partes.push(texto.slice(ultimo,m.index));ultimo=fim;comando.lastIndex=fim;
   }
   partes.push(texto.slice(ultimo));
-  return {texto:partes.join(''),entradas};
+  return {texto:ultimo?partes.join('').trim():texto,entradas};
  };
  let atual=null;
  window._mostrarSaboresChocolate = function(card,entradas) {
@@ -40,20 +40,31 @@
     <p id="ch-sabor-resultado" class="ch-sabor-resultado" role="status" aria-live="polite">Gosto de chocolate...</p>
    </div></div>`;
   const input=overlay.querySelector('input'),visor=overlay.querySelector('.ch-nome-visor'),saida=overlay.querySelector('.ch-sabor-resultado'),painel=overlay.firstElementChild,botao=overlay.querySelector('.fechar');
-  let sugestao=null,fechado=false;
+  let sugestao=null,fechado=false,ultimoEstado='';
+  const nomes=entradas.map(item=>({...item,chave:normalizar(item.nome)}));
+  // Mantém o cursor no mesmo nó para o piscar não reiniciar a cada atualização.
+  const digitadoSpan=document.createElement('span');digitadoSpan.className='texto-digitado';
+  const antes=document.createTextNode(''),depois=document.createTextNode('');
+  const caret=document.createElement('span');caret.className='cursor-falso';
+  const resto=document.createElement('span');resto.className='texto-sugestao';
+  digitadoSpan.append(antes,caret,depois);visor.append(digitadoSpan,resto);
   function atualizar(){
-   const digitado=input.value,chave=normalizar(digitado),focado=document.activeElement===input;
-   sugestao=chave?entradas.find(item=>normalizar(item.nome).startsWith(chave)):null;
-   const encontrado=entradas.find(item=>normalizar(item.nome)===chave);
-   saida.textContent=encontrado?encontrado.sabor:chave&&!sugestao?'Nenhum sabor informado para esse nome.':'Gosto de chocolate...';
-   visor.replaceChildren();visor.classList.toggle('input-focado',focado);
-   if(!digitado){const span=document.createElement('span');span.className='texto-sugestao';span.textContent=input.placeholder;visor.append(span);return;}
-   const span=document.createElement('span');span.className='texto-digitado';
-   const cursor=input.selectionStart??digitado.length;
-   span.append(document.createTextNode(digitado.slice(0,cursor)));
-   if(focado){const caret=document.createElement('span');caret.className='cursor-falso';span.append(caret);}
-   span.append(document.createTextNode(digitado.slice(cursor)));visor.append(span);
-   if(sugestao){const resto=document.createElement('span');resto.className='texto-sugestao';resto.textContent=sugestao.nome.slice(digitado.length);visor.append(resto);}
+   const digitado=input.value,focado=document.activeElement===input,cursor=input.selectionStart??digitado.length;
+   const estado=JSON.stringify([digitado,cursor,focado]);
+   if(estado===ultimoEstado)return;ultimoEstado=estado;
+   const chave=normalizar(digitado);
+   const coincidencias=chave?nomes.filter(item=>item.chave.startsWith(chave)):[];
+   sugestao=coincidencias[0]||null;
+   const encontrado=coincidencias.length===1?coincidencias[0]:null;
+   const sabor=encontrado?encontrado.sabor:chave&&!sugestao?'Gosta de nada.':'Gosto de chocolate...';
+   if(saida.textContent!==sabor)saida.textContent=sabor;
+   visor.classList.toggle('input-focado',focado);
+   const inicio=focado?digitado.slice(0,cursor):digitado,fim=focado?digitado.slice(cursor):'';
+   if(antes.nodeValue!==inicio)antes.nodeValue=inicio;
+   if(depois.nodeValue!==fim)depois.nodeValue=fim;
+   // Como no campo de professor: vazio em foco mostra o cursor; fora de foco, o placeholder.
+   const sufixo=!digitado?(!focado?input.placeholder:''):(focado&&sugestao?sugestao.nome.slice(digitado.length):'');
+   if(resto.textContent!==sufixo)resto.textContent=sufixo;
   }
   function completar(){if(sugestao){input.value=sugestao.nome;input.setSelectionRange(input.value.length,input.value.length);}atualizar();}
   const selecionar=()=>{if(document.activeElement===input)atualizar();};

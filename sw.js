@@ -1,9 +1,9 @@
-const CACHE = 'quadro-chocolate-c6f0258adc10';
+const CACHE = 'quadro-chocolate-2ea626484d29';
 
 const ARQUIVOS_OFFLINE = [
   '/chocolate-atividade.js?v=08e60a540ac4',
   '/chocolate-atividade.css?v=13c9dfef7b40',
-  '/chocolate-sabores.js?v=40fa86a22139',
+  '/chocolate-sabores.js?v=2ea626484d29',
   '/chocolate-gotas.js?v=6b2f02114601',
   '/jiesc-atividade.css?v=f9ac19acb904',
   '/jiesc-atividade.js?v=918e44791593',
