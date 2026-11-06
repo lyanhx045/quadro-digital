@@ -1358,22 +1358,22 @@ body {
   overflow-y: auto;
 }
 
-.card-atividade.aberto .card-detalhes::-webkit-scrollbar {
+.card-atividade .card-detalhes::-webkit-scrollbar {
   width: 10px;
 }
 
-.card-atividade.aberto .card-detalhes::-webkit-scrollbar-track {
+.card-atividade .card-detalhes::-webkit-scrollbar-track {
   background: rgb(var(--cor-branco-medio));
   border-radius: 20px;
 }
 
-.card-atividade.aberto .card-detalhes::-webkit-scrollbar-thumb {
+.card-atividade .card-detalhes::-webkit-scrollbar-thumb {
   background: rgb(var(--cor-branco-escuro));
   border-radius: 10px;
   border: 2.2px solid rgb(var(--cor-branco-medio));
 }
 
-.card-atividade.aberto .card-detalhes::-webkit-scrollbar-thumb:hover {
+.card-atividade .card-detalhes::-webkit-scrollbar-thumb:hover {
   background: rgb(var(--cor-letra-apagada));
 }
 
@@ -1382,22 +1382,22 @@ body {
   overflow-y: auto;
 }
 
-#manual-card-preview.aberto .card-detalhes::-webkit-scrollbar {
+#manual-card-preview .card-detalhes::-webkit-scrollbar {
   width: 10px;
 }
 
-#manual-card-preview.aberto .card-detalhes::-webkit-scrollbar-track {
+#manual-card-preview .card-detalhes::-webkit-scrollbar-track {
   background: rgb(var(--cor-branco-claro));
   border-radius: 20px;
 }
 
-#manual-card-preview.aberto .card-detalhes::-webkit-scrollbar-thumb {
+#manual-card-preview .card-detalhes::-webkit-scrollbar-thumb {
   background: rgb(var(--cor-branco-escuro));
   border-radius: 10px;
   border: 2.2px solid rgb(var(--cor-branco-claro));
 }
 
-#manual-card-preview.aberto .card-detalhes::-webkit-scrollbar-thumb:hover {
+#manual-card-preview .card-detalhes::-webkit-scrollbar-thumb:hover {
   background: rgb(var(--cor-letra-apagada));
 }
 
@@ -1425,9 +1425,10 @@ body {
   padding: 6.75px;
   opacity: 0;
   transform: translateY(calc(((9 * var(--detalhes-height)) / 20) - 8.5px)) scale(0.1);
-  height: fit-content;
+  height: var(--detalhes-height, fit-content);
+  overflow-y: auto;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   background: #00000000;
   border-radius: 15px;
   position: absolute;
@@ -5639,7 +5640,8 @@ li.erro-envio #entrada-link + .preview-link {
 
 #manual-card-preview .card-detalhes {
   align-items: flex-start !important;
-  overflow: hidden !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
 }
 
 .modal-manual,

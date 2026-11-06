@@ -1439,7 +1439,7 @@ const diasSemanaAbrev = ['D','S','T','Q','Q','S','S'];
 const normalizarTexto = (t) =>
   t ? t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim() : '';
 
-function _contarCaracteresUteis(texto,ignorarComandos=false){let valor=String(texto||'');if(ignorarComandos)valor=valor.replace(/!(?:halloween|minecraft)\b/gi,'');return valor.replace(/\s/g,'').length;}
+function _contarCaracteresUteis(texto,ignorarComandos=false){let valor=String(texto||'');if(ignorarComandos)valor=valor.replace(/!(?:halloween|minecraft|chocolate)\b/gi,'');return valor.replace(/\s/g,'').length;}
 
 function formatarTextoDescricao(texto) {
   if (!texto || typeof texto !== 'string') return '';
@@ -4867,6 +4867,7 @@ function _vincularPreviaManual(overlay) {
     window._aplicarHalloweenPrevia?.(card,detVal);
     window._aplicarMinecraftPrevia?.(card,detVal);
     window._aplicarJiescPrevia?.(card,detVal);
+    window._aplicarChocolatePrevia?.(card,detVal);
     // Anexos — exibe os arquivos do bloco ativo no card preview
     let anexosPrevia = card.querySelector('.lista-anexos-card');
     const arquivosAtivos = formState ? (formState.arquivos[idxAtivo] || []) : [];
@@ -4937,30 +4938,7 @@ function _vincularPreviaManual(overlay) {
   // Botão do título: abre/fecha detalhes igual ao card real
   if (tituloEl) {
     tituloEl.addEventListener('click', () => {
-      const d = card.querySelector('.card-detalhes');
-      const abrindo = !card.classList.contains('aberto');
-      const maxH = _vhFixoEmPx(15);
-
-      if (abrindo) {
-        // Seta --detalhes-height antes de .aberto para a animação partir certo
-        const h = Math.min(d.scrollHeight, maxH);
-        card.style.setProperty('--detalhes-height', `${h}px`);
-        card.classList.add('aberto');
-        // Após layout, aplica height fixo em px para scroll funcionar corretamente
-        requestAnimationFrame(() => {
-          const hReal = Math.min(d.scrollHeight, maxH);
-          d.style.height = `${hReal}px`;
-          card.style.setProperty('--detalhes-height', `${hReal}px`);
-          d.scrollTop = 0;
-        });
-      } else {
-        // Ao fechar: fixa height atual em px, depois vai a 0 no próximo frame para a transição partir certo
-        d.style.height = `${d.offsetHeight}px`;
-        requestAnimationFrame(() => {
-          d.style.height = '0px';
-          card.classList.remove('aberto');
-        });
-      }
+      _alternarDetalhesCard(card);
     });
   }
 }
@@ -5936,6 +5914,21 @@ function atualizarCacheAtividadesProximas() {
     .sort(ordenarAtividadesProximas);
 }
 
+function _alternarDetalhesCard(card) {
+  const detalhes = card.querySelector('.card-detalhes');
+  if (!detalhes) return;
+  if (card.classList.contains('aberto')) {
+    // O conteúdo conserva sua caixa; somente o movimento e a opacidade fecham.
+    card.classList.remove('aberto');
+    return;
+  }
+  const altura = Math.min(detalhes.scrollHeight, _vhFixoEmPx(15));
+  card.style.setProperty('--detalhes-height', altura + 'px');
+  detalhes.style.height = altura + 'px';
+  detalhes.scrollTop = 0;
+  card.classList.add('aberto');
+}
+
 function criarCardAtividadeProxima(item) {
   const card = document.createElement('div');
   if (item.id != null) card.dataset.itemId = String(item.id);
@@ -5971,28 +5964,8 @@ function criarCardAtividadeProxima(item) {
     ${htmlAnexos}
   `;
 
-  card.querySelector('.card-titulo').addEventListener('click', () => {
-    const d = card.querySelector('.card-detalhes');
-    const abrindo = !card.classList.contains('aberto');
-    const maxH = _vhFixoEmPx(15);
-
-    if (abrindo) {
-      const h = Math.min(d.scrollHeight, maxH);
-      card.style.setProperty('--detalhes-height', `${h}px`);
-      card.classList.add('aberto');
-      requestAnimationFrame(() => {
-        const hReal = Math.min(d.scrollHeight, maxH);
-        d.style.height = `${hReal}px`;
-        card.style.setProperty('--detalhes-height', `${hReal}px`);
-        d.scrollTop = 0;
-      });
-    } else {
-      d.style.height = `${d.offsetHeight}px`;
-      requestAnimationFrame(() => {
-        d.style.height = '0px';
-        card.classList.remove('aberto');
-      });
-    }
+  card.querySelector('.card-titulo').addEventListener('click', function () {
+    _alternarDetalhesCard(card);
     atualizarAlturasCardsProximos();
   });
 
@@ -6414,28 +6387,8 @@ function criarCardAtividadeDia(item) {
     _interceptarCliqueCalendarioEditor(e);
   }, true); // capture=true para rodar antes dos filhos
 
-  card.querySelector('.card-titulo').addEventListener('click', () => {
-    const d = card.querySelector('.card-detalhes');
-    const abrindo = !card.classList.contains('aberto');
-    const maxH = _vhFixoEmPx(15);
-
-    if (abrindo) {
-      const h = Math.min(d.scrollHeight, maxH);
-      card.style.setProperty('--detalhes-height', `${h}px`);
-      card.classList.add('aberto');
-      requestAnimationFrame(() => {
-        const hReal = Math.min(d.scrollHeight, maxH);
-        d.style.height = `${hReal}px`;
-        card.style.setProperty('--detalhes-height', `${hReal}px`);
-        d.scrollTop = 0;
-      });
-    } else {
-      d.style.height = `${d.offsetHeight}px`;
-      requestAnimationFrame(() => {
-        d.style.height = '0px';
-        card.classList.remove('aberto');
-      });
-    }
+  card.querySelector('.card-titulo').addEventListener('click', function () {
+    _alternarDetalhesCard(card);
     atualizarAlturasCardsAtividade();
   });
 

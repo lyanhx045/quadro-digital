@@ -1,0 +1,24 @@
+.card-atividade.ch-card{--cor-area:99,56,37;--cor-branco-claro:250,231,204;--cor-cinza-borda:213,176,132;isolation:isolate;overflow:hidden;background:#603821;box-shadow:inset 1px 2px 3px #fff4,inset -2px -3px 5px #2b130aaa,0 3px 10px #49241344;border:1px solid #a77c57}
+.ch-card .card-materia,.ch-card .card-prof{position:relative;z-index:2;color:#fae7cc;text-shadow:0 1px 2px #331a10;font-size:14px}.ch-card .card-materia{letter-spacing:2px}.ch-card .card-prof{font-size:12px}.ch-card .tag-tipo{z-index:3;background:#b57c41!important;color:#fff1d7!important;animation:none;font-size:10px;box-shadow:inset 1px 1px 2px #ffe0a877}.ch-card .card-titulo{z-index:4;font-size:16px;background:#ad7856cc;color:#fff0d8;outline-color:#d3a17a66;text-shadow:0 1px 2px #4b2416;box-shadow:inset 1px 1px 2px #ffe6c53b,inset -1px -2px 3px #39160866}.ch-card:hover .card-titulo,.ch-card.aberto .card-titulo{background:#f2d9b6;color:#63391f;text-shadow:0 1px 1px #fff8;outline-color:#ffe6c6}
+.ch-card.aberto .card-detalhes{background:#f5e6ce;color:#654934;border-color:#d5b592;box-shadow:inset 2px 2px 4px #7c482523;text-shadow:0 1px 1px #fff7;z-index:3}.ch-card .texto-detalhes,.ch-card .texto-detalhes *{color:inherit}.ch-card .card-detalhes{z-index:3}.ch-card .card-pontos-tipo{z-index:4}.ch-card .card-pontos-tipo div{background:#d8a05e;box-shadow:0 0 3px #e7b474;animation:none!important}
+.ch-decor{position:absolute;inset:0;pointer-events:none;z-index:0;color:inherit}.ch-tablete{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;padding:7px;opacity:.6}.ch-tablete i{border-radius:7px;background:linear-gradient(145deg,#9a6343,#663c28);box-shadow:inset 2px 2px 3px #f3bb8055,inset -3px -3px 3px #32180aaa;min-height:33px}.card-atividade.ch-derretido{overflow:visible;--ch-chocolate:#603821}
+.ch-derretido > .ch-decor{overflow:hidden;border-radius:inherit}
+.ch-pingos-fora{position:absolute;inset:0;pointer-events:none;z-index:-1;border-radius:inherit}
+.ch-liquido-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;fill:var(--ch-chocolate);pointer-events:none;shape-rendering:geometricPrecision}
+.ch-liquido-svg,.ch-liquido-svg *{transition:none!important;pointer-events:none}
+
+:root:has(#cfg-tema-escuro:not(:empty), #halloween-tema-temporario:not(:empty)) .ch-card.aberto .card-detalhes{background:#332b27;color:#ead5bd;border-color:#71543b;text-shadow:0 1px 1px #0008}
+.ch-comando{opacity:.25}
+#lista-atividades-proximas .ch-card,#lista-atividades-dia .ch-card{z-index:1}
+.ch-sabores-overlay{z-index:1001}
+.ch-sabores-container{width:var(--width-li);max-width:100%;display:flex;flex-direction:column;gap:calc(.75 * var(--valor-vh))}
+.ch-sabores .topo-modal-manual{position:relative;min-height:35px;display:flex;justify-content:center;align-items:center}
+.ch-nome-campo{position:relative;height:calc(6 * var(--valor-vh));min-height:42px;width:100%}
+.ch-nome{position:relative;z-index:2;width:100%;height:100%;background:transparent;border:0;outline:0;border-radius:20.5px;text-align:center;font:inherit;font-size:105%;color:transparent;caret-color:transparent}
+.ch-nome::placeholder{color:transparent}
+.ch-nome::selection{background:transparent}
+.ch-nome-visor{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:20.5px;background:rgba(var(--cor-letra-apagada),.075);box-shadow:inset -3px -3px 6px rgba(var(--cor-inset-claro),.075),inset 3px 3px 6px rgba(var(--cor-inset-escuro),.05);font-size:105%;pointer-events:none;white-space:pre;overflow:hidden}
+.ch-nome-visor .texto-digitado{color:rgb(var(--cor-letra));text-shadow:var(--text-shadow-letra)}
+.ch-nome-visor .texto-sugestao{color:rgb(var(--cor-letra-apagada));text-shadow:-1.5px 2px 2px rgba(var(--cor-relevo-claro),.35)}
+.ch-sabor-resultado{margin:calc(.75 * var(--valor-vh)) 0;text-align:center;color:rgb(var(--cor-letra-apagada));text-shadow:var(--text-shadow-apagado);font-size:95%;line-height:1.5;overflow-wrap:anywhere}
+@media(prefers-reduced-motion:reduce){.ch-sabores-overlay,.ch-sabores{animation:none!important;transition:none!important}}

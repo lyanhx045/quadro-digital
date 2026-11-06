@@ -1,6 +1,10 @@
-const CACHE = 'quadro-jiesc-tema-f9ac19acb904';
+const CACHE = 'quadro-chocolate-c6f0258adc10';
 
 const ARQUIVOS_OFFLINE = [
+  '/chocolate-atividade.js?v=08e60a540ac4',
+  '/chocolate-atividade.css?v=13c9dfef7b40',
+  '/chocolate-sabores.js?v=40fa86a22139',
+  '/chocolate-gotas.js?v=6b2f02114601',
   '/jiesc-atividade.css?v=f9ac19acb904',
   '/jiesc-atividade.js?v=918e44791593',
   '/minecraft-texturas/tuff.png',
@@ -33,8 +37,8 @@ const ARQUIVOS_OFFLINE = [
   '/horario-professores.css?v=92a3724765f9',
   '/horario-professores.js?v=92a3724765f9',
   '/index.html',
-  '/index.css?v=2f5b13ab7a3d',
-  '/index.js?v=974084cd4335',
+  '/index.css?v=6806f8ddba4d',
+  '/index.js?v=8d3f1f7cd677',
   '/manifest.json',
   '/icons/notificacao-192.png',
   '/anexos-guia/conteudo.pptx',
