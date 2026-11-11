@@ -1,8 +1,8 @@
-const CACHE = 'quadro-chocolate-sabores-label-1111';
+const CACHE = 'quadro-chocolate-dc672e295819';
 
 const ARQUIVOS_OFFLINE = [
   '/chocolate-atividade.js?v=08e60a540ac4',
-  '/chocolate-atividade.css?v=a42875b85d48',
+  '/chocolate-atividade.css?v=dc672e295819',
   '/chocolate-sabores.js?v=213b5f1a3ac7',
   '/chocolate-gotas.js?v=6b2f02114601',
   '/jiesc-atividade.css?v=f9ac19acb904',

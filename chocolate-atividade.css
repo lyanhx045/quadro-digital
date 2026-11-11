@@ -25,7 +25,7 @@
 
 /* Campo de sabores: rótulo do login centralizado. */
 .ch-nome-campo.user-t{width:100%;margin-top:10px;justify-content:center}
-.ch-nome-campo.user-t input.ch-nome{padding:0;background:transparent;box-shadow:none;color:transparent;caret-color:transparent;font-size:105%}
+.ch-nome-campo.user-t input.ch-nome{padding:0;background:transparent;box-shadow:none;color:transparent;caret-color:transparent;text-shadow:none;font-size:105%}
 .ch-nome-campo.user-t label{width:210px;transform:none}
 .ch-nome-campo.user-t::before{width:calc(190px * .8);transform:none}
 .ch-nome-campo.user-t:has(input:focus)::before,
