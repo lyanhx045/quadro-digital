@@ -22,3 +22,13 @@
 .ch-nome-visor .texto-sugestao{color:rgb(var(--cor-letra-apagada));text-shadow:-1.5px 2px 2px rgba(var(--cor-relevo-claro),.35)}
 .ch-sabor-resultado{margin:calc(.75 * var(--valor-vh)) 0;text-align:center;color:rgb(var(--cor-letra-apagada));text-shadow:var(--text-shadow-apagado);font-size:95%;line-height:1.5;overflow-wrap:anywhere}
 @media(prefers-reduced-motion:reduce){.ch-sabores-overlay,.ch-sabores{animation:none!important;transition:none!important}}
+
+/* Campo de sabores: rótulo do login centralizado. */
+.ch-nome-campo.user-t{width:100%;margin-top:10px;justify-content:center}
+.ch-nome-campo.user-t input.ch-nome{padding:0;background:transparent;box-shadow:none;color:transparent;caret-color:transparent;font-size:105%}
+.ch-nome-campo.user-t label{width:210px;transform:none}
+.ch-nome-campo.user-t::before{width:calc(190px * .8);transform:none}
+.ch-nome-campo.user-t:has(input:focus)::before,
+.ch-nome-campo.user-t:has(input:not(:placeholder-shown))::before{transform:translateY(-100%)!important}
+.ch-nome-campo.user-t input:focus+label,
+.ch-nome-campo.user-t input:not(:placeholder-shown)+label{transform:translateY(-86.5%) scale(.8)!important}
